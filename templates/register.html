@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Register - BrickComplete{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-user-plus"></i> Create Account</h5>
+            </div>
+            <div class="card-body">
+                <form id="registerForm">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.username.label(class="form-label") }}
+                        {{ form.username(class="form-control", id="username") }}
+                        <div id="usernameError" class="text-danger" style="display: none;"></div>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.password.label(class="form-label") }}
+                        {{ form.password(class="form-control", id="password") }}
+                        <div id="passwordError" class="text-danger" style="display: none;"></div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-lego" id="submitBtn">
+                            <span id="submitText">Create Account</span>
+                            <span id="submitSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+                        </button>
+                    </div>
+                </form>
+                <div class="text-center mt-3">
+                    <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+                    <small class="text-muted">You'll be automatically logged in after registration</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    const submitSpinner = document.getElementById('submitSpinner');
+    const usernameError = document.getElementById('usernameError');
+    const passwordError = document.getElementById('passwordError');
+    
+    // Clear previous errors
+    usernameError.style.display = 'none';
+    passwordError.style.display = 'none';
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    submitText.textContent = 'Creating Account...';
+    submitSpinner.style.display = 'inline-block';
+    
+    try {
+        const formData = new FormData(this);
+        const response = await fetch('/register', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            // Show success popup
+            showPopupNotification(data.message, 'success', 3000);
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+                window.location.href = data.redirect;
+            }, 1500);
+        } else {
+            // Handle validation errors
+            if (data.errors) {
+                if (data.errors.username) {
+                    usernameError.textContent = data.errors.username[0];
+                    usernameError.style.display = 'block';
+                }
+                if (data.errors.password) {
+                    passwordError.textContent = data.errors.password[0];
+                    passwordError.style.display = 'block';
+                }
+            } else {
+                showPopupNotification(data.message || 'Registration failed', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        showPopupNotification('An error occurred during registration', 'error');
+    } finally {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitText.textContent = 'Create Account';
+        submitSpinner.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

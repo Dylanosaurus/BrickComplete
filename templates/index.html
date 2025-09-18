@@ -1,0 +1,883 @@
+{% extends "base.html" %}
+
+{% block title %}BrickComplete - LEGO Set Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-light p-5 rounded mb-4">
+            <h1 class="display-4">
+                <i class="fas fa-cube text-danger"></i> BrickComplete
+            </h1>
+            <p class="lead">Search for LEGO sets and manage your inventory with ease!</p>
+            <hr class="my-4">
+            <p>Enter a LEGO set number to view its inventory and modify quantities for your collection.</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-search"></i> Search LEGO Set</h5>
+            </div>
+            <div class="card-body">
+                <form id="searchForm">
+                    <div class="mb-3">
+                        <label for="setNumber" class="form-label">Set Number</label>
+                        <input type="text" class="form-control" id="setNumber" placeholder="e.g., 10265-1" required>
+                        <div class="form-text">Enter the LEGO set number (format: 10265-1)</div>
+                        <div id="setSuggestions" class="mt-2" style="display: none;">
+                            <small class="text-muted">Suggestions:</small>
+                            <div id="suggestionList" class="mt-1"></div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-lego">
+                        <i class="fas fa-search"></i> Search Set
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> How it Works</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Enter a LEGO set number in the search box</li>
+                    <li>View the complete inventory of parts</li>
+                    <li>Use + and - buttons to modify quantities</li>
+                    <li>Your changes are automatically saved to your account</li>
+                </ol>
+                {% if not current_user.is_authenticated %}
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Login required!</strong> You need to be logged in to save inventory modifications.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="setInfo" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
+                <button class="btn btn-success" id="saveInventory" style="display: none;">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="setDetails"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="instanceSelectionSection" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Select Set Instance</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">You have existing instances of this set. Choose which one to view or add a new instance:</p>
+                <div id="instanceSelectionList" class="mb-3"></div>
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-tag"></i></span>
+                            <input type="text" class="form-control" id="newInstanceName" placeholder="Enter new instance name (e.g., 'Built Set', 'Spare Parts')" value="Default">
+                        </div>
+                        <div class="form-text">Give this new set instance a unique name</div>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-success w-100" id="addNewInstanceBtn" onclick="addNewInstance()">
+                            <i class="fas fa-plus"></i> Add New Instance
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="inventoryContainer" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5><i class="fas fa-list"></i> Set Inventory</h5>
+                    <button id="saveInventoryBtn" class="btn btn-success" onclick="saveInventory()" style="display: none;">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="inventoryList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="loadingSpinner" class="text-center mt-4" style="display: none;">
+    <div class="spinner-border text-danger" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2">Loading set information...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSetNumber = '';
+let modifiedInventory = {};
+let currentInstanceName = 'Default';
+let hasUnsavedChanges = false;
+let currentlySelectedInstance = null;
+let originalInventoryMap = {};
+
+document.getElementById('searchForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const setNumber = document.getElementById('setNumber').value.trim();
+    if (setNumber) {
+        searchSet(setNumber);
+    }
+});
+
+// Add input event listener for set number suggestions
+document.getElementById('setNumber').addEventListener('input', function(e) {
+    const value = e.target.value.trim();
+    if (value.length >= 3) {
+        showSetSuggestions(value);
+    } else {
+        hideSetSuggestions();
+    }
+});
+
+// Add keyboard navigation for set number input
+document.getElementById('setNumber').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const setNumber = e.target.value.trim();
+        if (setNumber) {
+            searchSet(setNumber);
+            hideSetSuggestions();
+        }
+    } else if (e.key === 'Escape') {
+        hideSetSuggestions();
+    }
+});
+
+// Popular LEGO set numbers for suggestions
+const popularSets = [
+    '10265-1', '10267-1', '10260-1', '10261-1', '10270-1',
+    '10271-1', '10272-1', '10273-1', '10274-1', '10275-1',
+    '10276-1', '10277-1', '10278-1', '10279-1', '10280-1',
+    '10281-1', '10282-1', '10283-1', '10284-1', '10285-1',
+    '10286-1', '10287-1', '10288-1', '10289-1', '10290-1',
+    '10291-1', '10292-1', '10293-1', '10294-1', '10295-1',
+    '10296-1', '10297-1', '10298-1', '10299-1', '10300-1',
+    '10301-1', '10302-1', '10303-1', '10304-1', '10305-1',
+    '10306-1', '10307-1', '10308-1', '10309-1', '10310-1',
+    '10311-1', '10312-1', '10313-1', '10314-1', '10315-1',
+    '10316-1', '10317-1', '10318-1', '10319-1', '10320-1',
+    '10321-1', '10322-1', '10323-1', '10324-1', '10325-1',
+    '10326-1', '10327-1', '10328-1', '10329-1', '10330-1',
+    '10331-1', '10332-1', '10333-1', '10334-1', '10335-1',
+    '10336-1', '10337-1', '10338-1', '10339-1', '10340-1',
+    '10341-1', '10342-1', '10343-1', '10344-1', '10345-1',
+    '10346-1', '10347-1', '10348-1', '10349-1', '10350-1',
+    '10351-1', '10352-1', '10353-1', '10354-1', '10355-1',
+    '10356-1', '10357-1', '10358-1', '10359-1', '10360-1',
+    '10361-1', '10362-1', '10363-1', '10364-1', '10365-1',
+    '10366-1', '10367-1', '10368-1', '10369-1', '10370-1',
+    '10371-1', '10372-1', '10373-1', '10374-1', '10375-1',
+    '10376-1', '10377-1', '10378-1', '10379-1', '10380-1',
+    '10381-1', '10382-1', '10383-1', '10384-1', '10385-1',
+    '10386-1', '10387-1', '10388-1', '10389-1', '10390-1',
+    '10391-1', '10392-1', '10393-1', '10394-1', '10395-1',
+    '10396-1', '10397-1', '10398-1', '10399-1', '10400-1'
+];
+
+function showSetSuggestions(input) {
+    const suggestions = popularSets.filter(set => set.includes(input));
+    const suggestionContainer = document.getElementById('setSuggestions');
+    const suggestionList = document.getElementById('suggestionList');
+    
+    if (suggestions.length > 0) {
+        suggestionList.innerHTML = '';
+        suggestions.slice(0, 5).forEach(set => {
+            const suggestionItem = document.createElement('div');
+            suggestionItem.className = 'suggestion-item p-2 border rounded mb-1 cursor-pointer';
+            suggestionItem.style.cursor = 'pointer';
+            suggestionItem.textContent = set;
+            suggestionItem.addEventListener('click', function() {
+                document.getElementById('setNumber').value = set;
+                hideSetSuggestions();
+                // Automatically search when suggestion is clicked
+                searchSet(set);
+            });
+            suggestionList.appendChild(suggestionItem);
+        });
+        suggestionContainer.style.display = 'block';
+    } else {
+        hideSetSuggestions();
+    }
+}
+
+function hideSetSuggestions() {
+    document.getElementById('setSuggestions').style.display = 'none';
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    const setNumberInput = document.getElementById('setNumber');
+    const suggestions = document.getElementById('setSuggestions');
+    
+    if (!setNumberInput.contains(e.target) && !suggestions.contains(e.target)) {
+        hideSetSuggestions();
+    }
+});
+
+async function searchSet(setNumber) {
+    currentSetNumber = setNumber;
+    currentlySelectedInstance = null; // Reset selected instance for new search
+    
+    // Hide previous results and show loading
+    document.getElementById('setInfo').style.display = 'none';
+    document.getElementById('instanceSelectionSection').style.display = 'none';
+    document.getElementById('inventoryContainer').style.display = 'none';
+    showLoading(true);
+    
+    try {
+        const response = await fetch('/search_set', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ set_number: setNumber })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            displaySetInfo(data);
+            // Don't load inventory here - let displaySetInfo handle instance selection first
+        } else {
+            showError(data.error || 'Failed to fetch set information');
+        }
+    } catch (error) {
+        showError('Network error: ' + error.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function displaySetInfo(data) {
+    document.getElementById('setTitle').innerHTML = 
+        `<i class="fas fa-cube"></i> ${data.set_name}`;
+    
+    // Create set details HTML with image
+    let setDetailsHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Set Number:</strong> ${data.set_number}
+            </div>
+            <div class="col-md-6">
+                <strong>Total Parts:</strong> ${data.num_parts || data.inventory.length}
+            </div>
+        </div>
+    `;
+    
+    // Add year if available
+    if (data.year) {
+        setDetailsHTML += `
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <strong>Year:</strong> ${data.year}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Add set image if available
+    if (data.set_image) {
+        const imageHTML = data.set_url ? 
+            `<a href="${data.set_url}" target="_blank" rel="noopener noreferrer" title="View set on official website">
+                <img src="${data.set_image}" alt="${data.set_name}" class="img-fluid rounded shadow-sm" style="max-height: 300px; max-width: 100%; cursor: pointer;">
+            </a>` :
+            `<img src="${data.set_image}" alt="${data.set_name}" class="img-fluid rounded shadow-sm" style="max-height: 300px; max-width: 100%;">`;
+            
+        setDetailsHTML += `
+            <div class="row mt-3">
+                <div class="col-12 text-center">
+                    ${imageHTML}
+                </div>
+            </div>
+        `;
+    }
+    
+    document.getElementById('setDetails').innerHTML = setDetailsHTML;
+    document.getElementById('setInfo').style.display = 'block';
+    
+    // Check for existing instances
+    const existingInstances = await getInstances(data.set_number);
+    
+    displayInstances(existingInstances, data.set_number);
+    document.getElementById('instanceSelectionSection').style.display = 'block';
+}
+
+function displayInventory(inventory) {
+    const container = document.getElementById('inventoryList');
+    container.innerHTML = '';
+    
+    // Reset unsaved changes and hide save button initially
+    hasUnsavedChanges = false;
+    document.getElementById('saveInventoryBtn').style.display = 'none';
+    
+    // Create a map of original inventory for quick lookup and store globally
+    originalInventoryMap = {};
+    inventory.forEach(part => {
+        const key = `${part.part_number}_${part.color_id}`;
+        originalInventoryMap[key] = part;
+    });
+    
+    // Separate regular parts and spare parts
+    const regularParts = inventory.filter(part => !part.is_spare);
+    const spareParts = inventory.filter(part => part.is_spare);
+    
+    // Display regular parts
+    if (regularParts.length > 0) {
+        const regularSection = document.createElement('div');
+        regularSection.innerHTML = `
+            <h6 class="mb-3"><i class="fas fa-cube"></i> Regular Parts (${regularParts.length})</h6>
+        `;
+        container.appendChild(regularSection);
+        
+        regularParts.forEach(part => {
+            const partCard = createPartCard(part, originalInventoryMap);
+            container.appendChild(partCard);
+        });
+    }
+    
+    // Display spare parts
+    if (spareParts.length > 0) {
+        const spareSection = document.createElement('div');
+        spareSection.innerHTML = `
+            <hr class="my-4">
+            <h6 class="mb-3"><i class="fas fa-gift"></i> Spare Parts (${spareParts.length})</h6>
+        `;
+        container.appendChild(spareSection);
+        
+        spareParts.forEach(part => {
+            const partCard = createPartCard(part, originalInventoryMap);
+            container.appendChild(partCard);
+        });
+    }
+    
+    document.getElementById('inventoryContainer').style.display = 'block';
+}
+
+function createPartCard(part, originalMap = {}) {
+    const partKey = `${part.part_number}_${part.color_id}`;
+    const modifiedQty = modifiedInventory[partKey] || 0;
+    
+    // Get original quantity from the original inventory map
+    const originalPart = originalMap[partKey];
+    const originalQty = originalPart ? originalPart.quantity : part.quantity;
+    const totalQty = originalQty + modifiedQty;
+    
+    // Calculate modification from original
+    const modificationFromOriginal = totalQty - originalQty;
+    
+    const partCard = document.createElement('div');
+    partCard.className = 'card part-card mb-3';
+    partCard.innerHTML = `
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-2">
+                    <div class="part-image-container">
+                        <img src="${part.part_image_url || 'https://via.placeholder.com/60x60?text=No+Image'}" 
+                             alt="${part.part_name}" 
+                             class="part-image"
+                             onerror="this.src='https://via.placeholder.com/60x60?text=No+Image'">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <strong>${part.part_number}</strong><br>
+                    <small class="text-muted">${part.part_name}</small>
+                </div>
+                <div class="col-md-2">
+                    <span class="badge bg-secondary">${part.color_name}</span>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">Original:</small><br>
+                    <strong>${originalQty}</strong>
+                </div>
+                <div class="col-md-3">
+                    <div class="quantity-controls">
+                        <button class="btn btn-outline-danger btn-sm" onclick="modifyQuantity('${partKey}', -1)" 
+                                ${totalQty <= 0 ? 'disabled title="Cannot reduce below zero"' : ''}>
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <span class="quantity-display" id="qty_${partKey}">${totalQty}</span>
+                        <button class="btn btn-outline-success btn-sm" onclick="modifyQuantity('${partKey}', 1)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <small class="text-info" style="display: ${modificationFromOriginal !== 0 ? 'block' : 'none'};">Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}</small>
+                </div>
+                <div class="col-md-1">
+                    ${part.is_spare ? '<span class="badge bg-warning">Spare</span>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    return partCard;
+}
+
+function modifyQuantity(partKey, change) {
+    if (!currentSetNumber) return;
+    
+    // Get the original quantity from the original inventory map
+    const originalPart = originalInventoryMap[partKey];
+    const originalQty = originalPart ? originalPart.quantity : 0;
+
+    // Update local state
+    const previousModifiedQty = modifiedInventory[partKey] || 0;
+    modifiedInventory[partKey] = previousModifiedQty + change;
+    
+    // Update the display without refreshing the entire inventory
+    updateQuantityDisplay(partKey, originalQty, modifiedInventory[partKey]);
+    
+    // Mark as having unsaved changes and show save button
+    hasUnsavedChanges = true;
+    document.getElementById('saveInventoryBtn').style.display = 'block';
+}
+
+async function loadModifiedInventory(setNumber, instanceName = 'Default') {
+    try {
+        const response = await fetch(`/get_modified_inventory/${setNumber}?instance_name=${encodeURIComponent(instanceName)}`);
+        if (response.ok) {
+            modifiedInventory = await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to load modified inventory:', error);
+    }
+}
+
+function showLoading(show) {
+    const loadingElement = document.getElementById('loadingSpinner');
+    if (show) {
+        loadingElement.style.display = 'block';
+        // Update loading message based on current action
+        const loadingText = loadingElement.querySelector('p');
+        if (loadingText) {
+            loadingText.textContent = 'Loading set information...';
+        }
+    } else {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function updateQuantityDisplay(partKey, originalQty, modifiedQty) {
+    // Update the quantity display
+    const qtyElement = document.getElementById(`qty_${partKey}`);
+    if (qtyElement) {
+        qtyElement.textContent = originalQty + modifiedQty;
+    }
+    
+    // Update the modification info
+    const partCard = qtyElement ? qtyElement.closest('.card') : null;
+    if (partCard) {
+        // Find the modification info element
+        let modificationInfo = partCard.querySelector('.text-info');
+        
+        // If modification info element doesn't exist, create it
+        if (!modificationInfo) {
+            const quantityControls = partCard.querySelector('.quantity-controls');
+            if (quantityControls) {
+                modificationInfo = document.createElement('small');
+                modificationInfo.className = 'text-info';
+                modificationInfo.style.display = 'none';
+                quantityControls.parentNode.appendChild(modificationInfo);
+            }
+        }
+        
+        if (modificationInfo) {
+            const totalQty = originalQty + modifiedQty;
+            const modificationFromOriginal = totalQty - originalQty;
+            if (modificationFromOriginal !== 0) {
+                modificationInfo.textContent = `Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}`;
+                modificationInfo.style.display = 'block';
+            } else {
+                modificationInfo.style.display = 'none';
+            }
+        }
+        
+        // Update button states
+        const minusButton = partCard.querySelector('.btn-outline-danger');
+        if (minusButton) {
+            const totalQty = originalQty + modifiedQty;
+            if (totalQty <= 0) {
+                minusButton.disabled = true;
+                minusButton.title = "Cannot reduce below zero";
+                minusButton.classList.add('disabled');
+            } else {
+                minusButton.disabled = false;
+                minusButton.title = "";
+                minusButton.classList.remove('disabled');
+            }
+        }
+    }
+}
+
+function showError(message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
+}
+
+// Collection management functions
+async function getInstances(setNumber) {
+    try {
+        const response = await fetch(`/get_user_sets/${setNumber}`);
+        
+        if (!response.ok) {
+            console.error(`Failed to load instances: ${response.status} ${response.statusText}`);
+            return [];
+        }
+        
+        const instances = await response.json();
+        return instances;
+    } catch (error) {
+        console.error('Error loading existing instances:', error);
+        return [];
+    }
+}
+
+function displayInstances(instances, setNumber) {
+    const instanceSelectionList = document.getElementById('instanceSelectionList');
+    instanceSelectionList.innerHTML = '';
+    
+    instances.forEach(instance => {
+        const instanceDiv = document.createElement('div');
+        
+        // Check if this is the currently selected instance
+        const isSelected = currentlySelectedInstance === instance.instance_name;
+        
+        // Apply different styling for selected vs unselected instances
+        if (isSelected) {
+            instanceDiv.className = 'alert alert-success d-flex justify-content-between align-items-center mb-2 border border-success border-2';
+            instanceDiv.style.cursor = 'pointer';
+            instanceDiv.innerHTML = `
+                <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+                    <strong>${instance.instance_name} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span></strong>
+                    <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
+                </div>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation(); deleteSetInstance(${instance.id}, '${instance.instance_name}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            `;
+        } else {
+            instanceDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
+            instanceDiv.style.cursor = 'pointer';
+            instanceDiv.innerHTML = `
+                <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+                    <strong>${instance.instance_name}</strong>
+                    <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
+                </div>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteSetInstance(${instance.id}, '${instance.instance_name}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            `;
+        }
+        
+        instanceSelectionList.appendChild(instanceDiv);
+    });
+}
+
+function updateInstanceSelectionDisplay(setNumber, selectedInstanceName) {
+    const instanceSelectionList = document.getElementById('instanceSelectionList');
+    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+    
+    instanceDivs.forEach(instanceDiv => {
+        const parentDiv = instanceDiv.closest('.alert');
+        const instanceName = instanceDiv.onclick.toString().match(/'([^']+)'\)/)[1];
+        
+        if (instanceName === selectedInstanceName) {
+            // Update to selected styling
+            parentDiv.className = 'alert alert-success d-flex justify-content-between align-items-center mb-2 border border-success border-2';
+            const strongElement = instanceDiv.querySelector('strong');
+            if (strongElement && !strongElement.innerHTML.includes('Selected')) {
+                strongElement.innerHTML = `${instanceName} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span>`;
+            }
+        } else {
+            // Update to unselected styling
+            parentDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
+            const strongElement = instanceDiv.querySelector('strong');
+            if (strongElement && strongElement.innerHTML.includes('Selected')) {
+                strongElement.innerHTML = instanceName;
+            }
+        }
+    });
+}
+
+function removeInstanceFromDisplay(instanceName) {
+    const instanceSelectionList = document.getElementById('instanceSelectionList');
+    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+    
+    instanceDivs.forEach(instanceDiv => {
+        const parentDiv = instanceDiv.closest('.alert');
+        const currentInstanceName = instanceDiv.onclick.toString().match(/'([^']+)'\)/)[1];
+        
+        if (currentInstanceName === instanceName) {
+            // Remove this instance from the DOM
+            parentDiv.remove();
+        }
+    });
+    
+    // Check if there are any instances left
+    const remainingInstances = instanceSelectionList.querySelectorAll('.alert');
+}
+
+function addInstanceToDisplay(instance, setNumber) {
+    const instanceSelectionList = document.getElementById('instanceSelectionList');
+    
+    // Create the new instance div
+    const instanceDiv = document.createElement('div');
+    instanceDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
+    instanceDiv.style.cursor = 'pointer';
+    instanceDiv.innerHTML = `
+        <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+            <strong>${instance.instance_name}</strong>
+            <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
+        </div>
+        <div class="btn-group" role="group">
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteSetInstance(${instance.id}, '${instance.instance_name}')">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    `;
+    
+    // Add the new instance to the list
+    instanceSelectionList.appendChild(instanceDiv);
+}
+
+async function selectInstance(setNumber, instanceName) {
+    // Do nothing if the currently selected instance is clicked
+    if (currentlySelectedInstance === instanceName) {
+        return;
+    }
+    
+    // If switching to a different instance, hide current inventory first
+    if (currentlySelectedInstance && currentlySelectedInstance !== instanceName) {
+        document.getElementById('inventoryContainer').style.display = 'none';
+        hasUnsavedChanges = false;
+    }
+    
+    // Set current instance for inventory modifications
+    currentInstanceName = instanceName;
+    currentlySelectedInstance = instanceName;
+    
+    // Update the instance selection display to show the selected instance
+    updateInstanceSelectionDisplay(setNumber, instanceName);
+    
+    try {
+        showLoading(true);
+        
+        const response = await fetch('/view_instance_inventory', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                set_number: setNumber,
+                instance_name: instanceName
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Load and display inventory with instance-specific modifications
+            await loadModifiedInventory(setNumber, instanceName);
+            displayInventory(data.inventory);
+        } else {
+            showAlert(data.error || 'Failed to load instance inventory', 'danger');
+        }
+    } catch (error) {
+        console.error('Error selecting instance:', error);
+        showAlert('An error occurred while loading the instance', 'danger');
+    } finally {
+        showLoading(false);
+    }
+}
+
+
+function showInstanceSelectionScreen() {
+    // Hide inventory and show instance selection
+    document.getElementById('inventoryContainer').style.display = 'none';
+    document.getElementById('instanceSelectionSection').style.display = 'block';
+}
+
+async function addNewInstance() {
+    const setNumber = currentSetNumber;
+    const setTitle = document.getElementById('setTitle').textContent.replace(' Set Information', '').replace(' ', '');
+    const instanceName = document.getElementById('newInstanceName').value.trim();
+    
+    if (!instanceName) {
+        showAlert('Please enter an instance name', 'warning');
+        return;
+    }
+    
+    if (!setNumber) {
+        showAlert('No set selected', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/add_to_collection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                set_number: setNumber,
+                set_name: setTitle,
+                instance_name: instanceName
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showPopupNotification('New set instance added successfully!', 'success');
+            
+            // Add the new instance to the display
+            const newInstance = {
+                id: data.owned_set_id,
+                instance_name: instanceName,
+                added_at: new Date().toISOString()
+            };
+            addInstanceToDisplay(newInstance, setNumber);
+            
+            // Automatically select the newly added instance
+            await selectInstance(setNumber, instanceName);
+            
+        } else {
+            if (data.login_required) {
+                showPopupNotification('Please log in to add sets to your collection', 'warning');
+                // Optionally redirect to login page
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
+            } else {
+                showPopupNotification(data.error || 'Failed to add set to collection', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error adding to collection:', error);
+        showPopupNotification('An error occurred while adding to collection', 'error');
+    }
+}
+
+
+function viewInstance(setNumber, instanceName) {
+    // For now, just show an alert. In the future, this could open a modal or navigate to a specific view
+    showAlert(`Viewing instance: ${instanceName} of set ${setNumber}`, 'info');
+}
+
+async function deleteSetInstance(owned_set_id, instanceName) {
+    if (!confirm(`Are you sure you want to delete the instance "${instanceName}"? This will also delete all inventory modifications for this instance.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/delete_set_instance', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                owned_set_id: owned_set_id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showPopupNotification('Set instance deleted successfully!', 'success');
+            
+            // Check if the deleted instance was the currently viewed one
+            const deletedInstanceName = instanceName;
+            if (currentlySelectedInstance === deletedInstanceName) {
+                // Hide inventory and reset selection
+                document.getElementById('inventoryContainer').style.display = 'none';
+                currentlySelectedInstance = null;
+                currentInstanceName = 'Default';
+                hasUnsavedChanges = false;
+            }
+            
+            // Remove the deleted instance from the DOM
+            removeInstanceFromDisplay(instanceName);
+        } else {
+            showPopupNotification(data.error || 'Failed to delete set instance', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting set instance:', error);
+        showPopupNotification('An error occurred while deleting the set instance', 'error');
+    }
+}
+
+async function saveInventory() {
+    if (!hasUnsavedChanges) {
+        showAlert('No changes to save', 'info');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/update_inventory', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                set_number: currentSetNumber,
+                instance_name: currentInstanceName,
+                modifications: modifiedInventory
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showPopupNotification('Inventory saved successfully!', 'success');
+            hasUnsavedChanges = false;
+            // Hide the save button
+            document.getElementById('saveInventoryBtn').style.display = 'none';
+        } else {
+            showPopupNotification(data.error || 'Failed to save inventory', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving inventory:', error);
+        showPopupNotification('An error occurred while saving inventory', 'error');
+    }
+}
+</script>
+{% endblock %}
