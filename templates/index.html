@@ -23,10 +23,10 @@
                 <h5><i class="fas fa-search"></i> Search LEGO Set</h5>
             </div>
             <div class="card-body">
-                <form id="searchForm">
+                <form id="searchForm" autocomplete="off">
                     <div class="mb-3">
                         <label for="setNumber" class="form-label">Set Number</label>
-                        <input type="text" class="form-control" id="setNumber" placeholder="e.g., 10265-1" required>
+                        <input type="text" class="form-control" id="setNumber" placeholder="e.g., 10265-1" autocomplete="off" required>
                         <div class="form-text">Enter the LEGO set number (format: 10265-1)</div>
                         <div id="setSuggestions" class="mt-2" style="display: none;">
                             <small class="text-muted">Suggestions:</small>
@@ -87,13 +87,13 @@
                 <h5><i class="fas fa-list"></i> Select Set Instance</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">You have existing instances of this set. Choose which one to view or add a new instance:</p>
+                <p class="text-muted" id="instanceSelectionText">You have existing instances of this set. Choose which one to view or add a new instance:</p>
                 <div id="instanceSelectionList" class="mb-3"></div>
                 <div class="row">
                     <div class="col-md-8">
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-tag"></i></span>
-                            <input type="text" class="form-control" id="newInstanceName" placeholder="Enter new instance name (e.g., 'Built Set', 'Spare Parts')" value="Default">
+                            <input type="text" class="form-control" id="newInstanceName" placeholder="Enter new instance name (e.g., 'Built Set', 'Spare Parts')" value="Default" autocomplete="off">
                         </div>
                         <div class="form-text">Give this new set instance a unique name</div>
                     </div>
@@ -135,6 +135,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script>
 let currentSetNumber = '';
 let modifiedInventory = {};
@@ -142,6 +143,55 @@ let currentInstanceName = 'Default';
 let hasUnsavedChanges = false;
 let currentlySelectedInstance = null;
 let originalInventoryMap = {};
+
+// Recent searches functionality
+const RECENT_SEARCHES_KEY = 'brickcomplete_recent_searches';
+const MAX_RECENT_SEARCHES = 5;
+
+function getRecentSearches() {
+    try {
+        const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+        console.error('Error loading recent searches:', error);
+        return [];
+    }
+}
+
+function saveRecentSearches(searches) {
+    try {
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches));
+    } catch (error) {
+        console.error('Error saving recent searches:', error);
+    }
+}
+
+function addToRecentSearches(setNumber, setName) {
+    const recentSearches = getRecentSearches();
+    
+    // Remove if already exists
+    const existingIndex = recentSearches.findIndex(item => item.setNumber === setNumber);
+    if (existingIndex !== -1) {
+        recentSearches.splice(existingIndex, 1);
+    }
+    
+    // Add to beginning
+    recentSearches.unshift({
+        setNumber: setNumber,
+        setName: setName,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Keep only the most recent searches
+    if (recentSearches.length > MAX_RECENT_SEARCHES) {
+        recentSearches.splice(MAX_RECENT_SEARCHES);
+    }
+    
+    saveRecentSearches(recentSearches);
+    
+    // Refresh recent search suggestions
+    loadRecentSearchSuggestions();
+}
 
 document.getElementById('searchForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -154,10 +204,14 @@ document.getElementById('searchForm').addEventListener('submit', function(e) {
 // Add input event listener for set number suggestions
 document.getElementById('setNumber').addEventListener('input', function(e) {
     const value = e.target.value.trim();
-    if (value.length >= 3) {
-        showSetSuggestions(value);
-    } else {
-        hideSetSuggestions();
+    showSuggestions(value);
+});
+
+// Add focus event listener to show recent searches when input is focused and empty
+document.getElementById('setNumber').addEventListener('focus', function(e) {
+    const value = e.target.value.trim();
+    if (value.length === 0) {
+        showSuggestions('');
     }
 });
 
@@ -165,75 +219,235 @@ document.getElementById('setNumber').addEventListener('input', function(e) {
 document.getElementById('setNumber').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
-        const setNumber = e.target.value.trim();
+        // If a suggestion is highlighted, use that; otherwise use the first suggestion if available, or the input value
+        let setNumber;
+        if (currentSuggestionIndex >= 0 && currentSuggestionIndex < suggestionItems.length) {
+            const highlightedItem = suggestionItems[currentSuggestionIndex];
+            // Extract set number from the suggestion item
+            setNumber = extractSetNumberFromSuggestion(highlightedItem);
+        } else if (suggestionItems.length > 0) {
+            // Auto-select the first suggestion if no suggestion is highlighted
+            setNumber = extractSetNumberFromSuggestion(suggestionItems[0]);
+        } else {
+            setNumber = e.target.value.trim();
+        }
         if (setNumber) {
             searchSet(setNumber);
-            hideSetSuggestions();
+            // hideSetSuggestions();
         }
     } else if (e.key === 'Escape') {
         hideSetSuggestions();
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateSuggestions(1);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateSuggestions(-1);
     }
 });
 
-// Popular LEGO set numbers for suggestions
-const popularSets = [
-    '10265-1', '10267-1', '10260-1', '10261-1', '10270-1',
-    '10271-1', '10272-1', '10273-1', '10274-1', '10275-1',
-    '10276-1', '10277-1', '10278-1', '10279-1', '10280-1',
-    '10281-1', '10282-1', '10283-1', '10284-1', '10285-1',
-    '10286-1', '10287-1', '10288-1', '10289-1', '10290-1',
-    '10291-1', '10292-1', '10293-1', '10294-1', '10295-1',
-    '10296-1', '10297-1', '10298-1', '10299-1', '10300-1',
-    '10301-1', '10302-1', '10303-1', '10304-1', '10305-1',
-    '10306-1', '10307-1', '10308-1', '10309-1', '10310-1',
-    '10311-1', '10312-1', '10313-1', '10314-1', '10315-1',
-    '10316-1', '10317-1', '10318-1', '10319-1', '10320-1',
-    '10321-1', '10322-1', '10323-1', '10324-1', '10325-1',
-    '10326-1', '10327-1', '10328-1', '10329-1', '10330-1',
-    '10331-1', '10332-1', '10333-1', '10334-1', '10335-1',
-    '10336-1', '10337-1', '10338-1', '10339-1', '10340-1',
-    '10341-1', '10342-1', '10343-1', '10344-1', '10345-1',
-    '10346-1', '10347-1', '10348-1', '10349-1', '10350-1',
-    '10351-1', '10352-1', '10353-1', '10354-1', '10355-1',
-    '10356-1', '10357-1', '10358-1', '10359-1', '10360-1',
-    '10361-1', '10362-1', '10363-1', '10364-1', '10365-1',
-    '10366-1', '10367-1', '10368-1', '10369-1', '10370-1',
-    '10371-1', '10372-1', '10373-1', '10374-1', '10375-1',
-    '10376-1', '10377-1', '10378-1', '10379-1', '10380-1',
-    '10381-1', '10382-1', '10383-1', '10384-1', '10385-1',
-    '10386-1', '10387-1', '10388-1', '10389-1', '10390-1',
-    '10391-1', '10392-1', '10393-1', '10394-1', '10395-1',
-    '10396-1', '10397-1', '10398-1', '10399-1', '10400-1'
-];
+// Set suggestions are now fetched from the database
 
-function showSetSuggestions(input) {
-    const suggestions = popularSets.filter(set => set.includes(input));
-    const suggestionContainer = document.getElementById('setSuggestions');
-    const suggestionList = document.getElementById('suggestionList');
-    
-    if (suggestions.length > 0) {
-        suggestionList.innerHTML = '';
-        suggestions.slice(0, 5).forEach(set => {
-            const suggestionItem = document.createElement('div');
-            suggestionItem.className = 'suggestion-item p-2 border rounded mb-1 cursor-pointer';
-            suggestionItem.style.cursor = 'pointer';
-            suggestionItem.textContent = set;
-            suggestionItem.addEventListener('click', function() {
-                document.getElementById('setNumber').value = set;
-                hideSetSuggestions();
-                // Automatically search when suggestion is clicked
-                searchSet(set);
-            });
-            suggestionList.appendChild(suggestionItem);
-        });
-        suggestionContainer.style.display = 'block';
-    } else {
+// Global variables for suggestion navigation
+let currentSuggestionIndex = -1;
+let suggestionItems = [];
+let allSuggestions = []; // Store all suggestions (recent + autofill)
+let recentSearchSuggestions = []; // Store recent search suggestions
+let autofillSuggestions = []; // Store autofill suggestions
+
+function extractSetNumberFromSuggestion(suggestionItem) {
+    // For recent search suggestions, extract the set number from the HTML structure
+    const setNumberSpan = suggestionItem.querySelector('span');
+    if (setNumberSpan) {
+        // Remove the icon and get just the set number
+        return setNumberSpan.textContent.replace(/^[^\w]*/, '').trim();
+    }
+    // Fallback to textContent for autofill suggestions
+    return suggestionItem.textContent.trim();
+}
+
+function createRecentSearchSuggestion(search) {
+    const suggestionItem = document.createElement('div');
+    suggestionItem.className = 'suggestion-item p-2 border rounded mb-1 cursor-pointer bg-light';
+    suggestionItem.style.cursor = 'pointer';
+    suggestionItem.id = `suggestion-${search.setNumber}`;
+    suggestionItem.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-history me-2"></i>${search.setNumber}</span>
+            <small class="text-muted">${search.setName}</small>
+        </div>
+    `;
+    suggestionItem.addEventListener('click', function() {
+        document.getElementById('setNumber').value = search.setNumber;
         hideSetSuggestions();
+        searchSet(search.setNumber);
+    });
+    return suggestionItem;
+}
+
+function createAutofillSuggestion(setData) {
+    const suggestionItem = document.createElement('div');
+    suggestionItem.className = 'suggestion-item p-2 border rounded mb-1 cursor-pointer bg-light';
+    suggestionItem.style.cursor = 'pointer';
+    suggestionItem.id = `suggestion-${setData.set_number}`;
+    suggestionItem.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-search me-2"></i>${setData.set_number}</span>
+            <small class="text-muted">${setData.set_name}</small>
+        </div>
+    `;
+    suggestionItem.addEventListener('click', function() {
+        document.getElementById('setNumber').value = setData.set_number;
+        hideSetSuggestions();
+        searchSet(setData.set_number);
+    });
+    return suggestionItem;
+}
+
+function loadRecentSearchSuggestions() {
+    const recentSearches = getRecentSearches();
+    recentSearchSuggestions = recentSearches.map(search => createRecentSearchSuggestion(search));
+}
+
+async function loadAutofillSuggestions(query) {
+    if (query.length < 2) {
+        autofillSuggestions = [];
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/get_set_suggestions?q=${encodeURIComponent(query)}&limit=10`);
+        if (response.ok) {
+            const suggestions = await response.json();
+            autofillSuggestions = suggestions.map(setData => createAutofillSuggestion(setData));
+        } else {
+            autofillSuggestions = [];
+        }
+    } catch (error) {
+        console.error('Error fetching autofill suggestions:', error);
+        autofillSuggestions = [];
     }
 }
 
+function filterAndDisplaySuggestions(input) {
+    const suggestionList = document.getElementById('suggestionList');
+    const suggestionContainer = document.getElementById('setSuggestions');
+    
+    // Clear current display
+    suggestionList.innerHTML = '';
+    suggestionItems = [];
+    currentSuggestionIndex = -1;
+    
+    let filteredSuggestions = [];
+    
+    if (input.length === 0) {
+        // Show all recent searches when input is empty
+        filteredSuggestions = recentSearchSuggestions.slice(0, 5);
+    } else {
+        // Filter suggestions based on input
+        const query = input.toLowerCase();
+        
+        // Filter recent searches
+        const filteredRecent = recentSearchSuggestions.filter(item => {
+            const setNumber = item.querySelector('span').textContent.replace(/^[^\w]*/, '').trim();
+            return setNumber.toLowerCase().startsWith(query);
+        });
+        
+        // Filter autofill suggestions, excluding those that are already in recent searches
+        const recentSetNumbers = new Set(filteredRecent.map(item => {
+            return item.querySelector('span').textContent.replace(/^[^\w]*/, '').trim();
+        }));
+        
+        const filteredAutofill = autofillSuggestions.filter(item => {
+            const setNumber = item.querySelector('span').textContent.replace(/^[^\w]*/, '').trim();
+            return setNumber.toLowerCase().startsWith(query) && !recentSetNumbers.has(setNumber);
+        });
+        
+        // Combine recent searches first (priority), then autofill, limit to 5 total
+        filteredSuggestions = [...filteredRecent, ...filteredAutofill].slice(0, 5);
+    }
+    
+    // Display filtered suggestions
+    if (filteredSuggestions.length > 0) {
+        filteredSuggestions.forEach(suggestion => {
+            suggestionList.appendChild(suggestion);
+            suggestionItems.push(suggestion);
+        });
+        suggestionContainer.style.display = 'block';
+    } else {
+        suggestionContainer.style.display = 'none';
+    }
+}
+
+function navigateSuggestions(direction) {
+    const suggestionContainer = document.getElementById('setSuggestions');
+    if (suggestionContainer.style.display === 'none' || suggestionItems.length === 0) {
+        return;
+    }
+    
+    // Update the current index
+    currentSuggestionIndex += direction;
+    
+    // Wrap around if needed
+    if (currentSuggestionIndex < 0) {
+        currentSuggestionIndex = suggestionItems.length - 1;
+    } else if (currentSuggestionIndex >= suggestionItems.length) {
+        currentSuggestionIndex = 0;
+    }
+    
+    // Remove highlight from all items
+    suggestionItems.forEach(item => {
+        item.classList.remove('bg-primary', 'text-white');
+        item.classList.add('bg-light');
+        // Reset set name text color
+        const setNameElement = item.querySelector('small');
+        if (setNameElement) {
+            setNameElement.classList.remove('text-white');
+            setNameElement.classList.add('text-muted');
+        }
+    });
+    
+    // Highlight the current item
+    if (currentSuggestionIndex >= 0 && currentSuggestionIndex < suggestionItems.length) {
+        const currentItem = suggestionItems[currentSuggestionIndex];
+        currentItem.classList.remove('bg-light');
+        currentItem.classList.add('bg-primary', 'text-white');
+        
+        // Make set name text white when highlighted
+        const setNameElement = currentItem.querySelector('small');
+        if (setNameElement) {
+            setNameElement.classList.remove('text-muted');
+            setNameElement.classList.add('text-white');
+        }
+        
+        // Update the input field with just the set number from the selected suggestion
+        const setNumberInput = document.getElementById('setNumber');
+        setNumberInput.value = extractSetNumberFromSuggestion(currentItem);
+    }
+}
+
+async function showSuggestions(input) {
+    // Load recent search suggestions if not already loaded
+    if (recentSearchSuggestions.length === 0) {
+        loadRecentSearchSuggestions();
+    }
+    
+    // Load autofill suggestions if user is typing
+    if (input.length >= 2) {
+        await loadAutofillSuggestions(input);
+    } else {
+        autofillSuggestions = [];
+    }
+    
+    // Filter and display suggestions
+    filterAndDisplaySuggestions(input);
+}
+
 function hideSetSuggestions() {
-    document.getElementById('setSuggestions').style.display = 'none';
+    // document.getElementById('setSuggestions').style.display = 'none';
+    // Reset navigation state
+    currentSuggestionIndex = -1;
+    suggestionItems = [];
 }
 
 // Hide suggestions when clicking outside
@@ -251,10 +465,10 @@ async function searchSet(setNumber) {
     currentlySelectedInstance = null; // Reset selected instance for new search
     
     // Hide previous results and show loading
-    document.getElementById('setInfo').style.display = 'none';
-    document.getElementById('instanceSelectionSection').style.display = 'none';
+    // document.getElementById('setInfo').style.display = 'none';
+    // document.getElementById('instanceSelectionSection').style.display = 'none';
     document.getElementById('inventoryContainer').style.display = 'none';
-    showLoading(true);
+    // showLoading(true);
     
     try {
         const response = await fetch('/search_set', {
@@ -269,12 +483,17 @@ async function searchSet(setNumber) {
         
         if (response.ok) {
             displaySetInfo(data);
+            // Add to recent searches
+            addToRecentSearches(setNumber, data.set_name);
+            // Clear the search bar after successful search
+            document.getElementById('setNumber').value = '';
+            // hideSetSuggestions();
             // Don't load inventory here - let displaySetInfo handle instance selection first
         } else {
-            showError(data.error || 'Failed to fetch set information');
+            showAlert(data.error || 'Failed to fetch set information', 'danger');
         }
     } catch (error) {
-        showError('Network error: ' + error.message);
+        showAlert('Network error: ' + error.message, 'danger');
     } finally {
         showLoading(false);
     }
@@ -331,6 +550,9 @@ async function displaySetInfo(data) {
     const existingInstances = await getInstances(data.set_number);
     
     displayInstances(existingInstances, data.set_number);
+    if (existingInstances.length > 0) {
+        selectInstance(data.set_number, existingInstances[0].instance_name);
+    }
     document.getElementById('instanceSelectionSection').style.display = 'block';
 }
 
@@ -349,9 +571,22 @@ function displayInventory(inventory) {
         originalInventoryMap[key] = part;
     });
     
-    // Separate regular parts and spare parts
-    const regularParts = inventory.filter(part => !part.is_spare);
+    // Separate parts by type and spare status
+    const regularParts = inventory.filter(part => !part.is_spare && (!part.minifig_sources || part.minifig_sources.length === 0));
+    const minifigParts = inventory.filter(part => !part.is_spare && part.minifig_sources && part.minifig_sources.length > 0);
     const spareParts = inventory.filter(part => part.is_spare);
+    
+    // Sort regular parts to put "No Color/Any Color" (color ID 9999) at the top
+    regularParts.sort((a, b) => {
+        const aIsNoColor = a.color_id === 9999 || a.color_name === 'No Color' || a.color_name === 'Any Color';
+        const bIsNoColor = b.color_id === 9999 || b.color_name === 'No Color' || b.color_name === 'Any Color';
+        
+        if (aIsNoColor && !bIsNoColor) return -1;
+        if (!aIsNoColor && bIsNoColor) return 1;
+        
+        // If both are no color or both are regular colors, maintain existing sort order
+        return 0;
+    });
     
     // Display regular parts
     if (regularParts.length > 0) {
@@ -362,6 +597,21 @@ function displayInventory(inventory) {
         container.appendChild(regularSection);
         
         regularParts.forEach(part => {
+            const partCard = createPartCard(part, originalInventoryMap);
+            container.appendChild(partCard);
+        });
+    }
+    
+    // Display minifig parts
+    if (minifigParts.length > 0) {
+        const minifigSection = document.createElement('div');
+        minifigSection.innerHTML = `
+            <hr class="my-4">
+            <h6 class="mb-3"><i class="fas fa-user"></i> Minifig Parts (${minifigParts.length})</h6>
+        `;
+        container.appendChild(minifigSection);
+        
+        minifigParts.forEach(part => {
             const partCard = createPartCard(part, originalInventoryMap);
             container.appendChild(partCard);
         });
@@ -413,6 +663,7 @@ function createPartCard(part, originalMap = {}) {
                 <div class="col-md-2">
                     <strong>${part.part_number}</strong><br>
                     <small class="text-muted">${part.part_name}</small>
+                    ${part.minifig_sources ? `<br><small class="minifig-info"><i class="fas fa-user"></i> From minifigs</small>` : ''}
                 </div>
                 <div class="col-md-2">
                     <span class="badge bg-secondary">${part.color_name}</span>
@@ -432,7 +683,7 @@ function createPartCard(part, originalMap = {}) {
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
-                    <small class="text-info" style="display: ${modificationFromOriginal !== 0 ? 'block' : 'none'};">Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}</small>
+                    <small class="modification-info" style="display: ${modificationFromOriginal !== 0 ? 'block' : 'none'};">Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}</small>
                 </div>
                 <div class="col-md-1">
                     ${part.is_spare ? '<span class="badge bg-warning">Spare</span>' : ''}
@@ -539,15 +790,6 @@ function updateQuantityDisplay(partKey, originalQty, modifiedQty) {
     }
 }
 
-function showError(message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
-}
 
 // Collection management functions
 async function getInstances(setNumber) {
@@ -569,7 +811,15 @@ async function getInstances(setNumber) {
 
 function displayInstances(instances, setNumber) {
     const instanceSelectionList = document.getElementById('instanceSelectionList');
+    const instanceSelectionText = document.getElementById('instanceSelectionText');
     instanceSelectionList.innerHTML = '';
+    
+    // Update the descriptive text based on whether instances exist
+    if (instances.length === 0) {
+        instanceSelectionText.textContent = 'You don\'t have any instances of this set yet. Add your first instance below:';
+    } else {
+        instanceSelectionText.textContent = 'You have existing instances of this set. Choose which one to view or add a new instance:';
+    }
     
     instances.forEach(instance => {
         const instanceDiv = document.createElement('div');
@@ -640,24 +890,64 @@ function updateInstanceSelectionDisplay(setNumber, selectedInstanceName) {
 
 function removeInstanceFromDisplay(instanceName) {
     const instanceSelectionList = document.getElementById('instanceSelectionList');
+    const instanceSelectionText = document.getElementById('instanceSelectionText');
     const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
     
-    instanceDivs.forEach(instanceDiv => {
-        const parentDiv = instanceDiv.closest('.alert');
+    let deletedInstanceIndex = -1;
+    let deletedInstanceDiv = null;
+    
+    // Find the instance to delete and its index
+    instanceDivs.forEach((instanceDiv, index) => {
         const currentInstanceName = instanceDiv.onclick.toString().match(/'([^']+)'\)/)[1];
         
         if (currentInstanceName === instanceName) {
-            // Remove this instance from the DOM
-            parentDiv.remove();
+            deletedInstanceIndex = index;
+            deletedInstanceDiv = instanceDiv;
         }
     });
     
-    // Check if there are any instances left
+    // Check if the deleted instance is currently selected
+    const wasCurrentlySelected = currentlySelectedInstance === instanceName;
+    
+    // Remove the instance from the DOM
+    if (deletedInstanceDiv) {
+        const parentDiv = deletedInstanceDiv.closest('.alert');
+        parentDiv.remove();
+    }
+    
+    // If the deleted instance was currently selected, select another instance
+    if (wasCurrentlySelected) {
+        const remainingInstanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+        
+        if (remainingInstanceDivs.length > 0) {
+            // Try to select the instance at the same index (below), or the one above if none below
+            let targetIndex = deletedInstanceIndex;
+            if (targetIndex >= remainingInstanceDivs.length) {
+                targetIndex = remainingInstanceDivs.length - 1; // Select the last one (above)
+            }
+            
+            const targetInstanceDiv = remainingInstanceDivs[targetIndex];
+            const targetInstanceName = targetInstanceDiv.onclick.toString().match(/'([^']+)'\)/)[1];
+            
+            // Automatically select the target instance
+            selectInstance(currentSetNumber, targetInstanceName);
+        } else {
+            // No instances left, clear the current selection
+            currentlySelectedInstance = null;
+            document.getElementById('inventoryContainer').style.display = 'none';
+        }
+    }
+    
+    // Check if there are any instances left and update text accordingly
     const remainingInstances = instanceSelectionList.querySelectorAll('.alert');
+    if (remainingInstances.length === 0) {
+        instanceSelectionText.textContent = 'You don\'t have any instances of this set yet. Add your first instance below:';
+    }
 }
 
 function addInstanceToDisplay(instance, setNumber) {
     const instanceSelectionList = document.getElementById('instanceSelectionList');
+    const instanceSelectionText = document.getElementById('instanceSelectionText');
     
     // Create the new instance div
     const instanceDiv = document.createElement('div');
@@ -677,6 +967,9 @@ function addInstanceToDisplay(instance, setNumber) {
     
     // Add the new instance to the list
     instanceSelectionList.appendChild(instanceDiv);
+    
+    // Update the descriptive text since we now have instances
+    instanceSelectionText.textContent = 'You have existing instances of this set. Choose which one to view or add a new instance:';
 }
 
 async function selectInstance(setNumber, instanceName) {
@@ -739,7 +1032,7 @@ function showInstanceSelectionScreen() {
 async function addNewInstance() {
     const setNumber = currentSetNumber;
     const setTitle = document.getElementById('setTitle').textContent.replace(' Set Information', '').replace(' ', '');
-    const instanceName = document.getElementById('newInstanceName').value.trim();
+    let instanceName = document.getElementById('newInstanceName').value.trim();
     
     if (!instanceName) {
         showAlert('Please enter an instance name', 'warning');
@@ -749,6 +1042,31 @@ async function addNewInstance() {
     if (!setNumber) {
         showAlert('No set selected', 'error');
         return;
+    }
+    
+    // Get existing instances to check for duplicates
+    const existingInstances = await getInstances(setNumber);
+    const existingNames = existingInstances.map(instance => instance.instance_name);
+    
+    // Generate a unique name if the current name already exists
+    const originalName = instanceName;
+    while (existingNames.includes(instanceName)) {
+        const lastChar = instanceName.slice(-1);
+        if (/\d/.test(lastChar)) {
+            // Last character is a digit, increment it
+            const baseName = instanceName.slice(0, -1);
+            const lastDigit = parseInt(lastChar);
+            instanceName = baseName + (lastDigit + 1);
+        } else {
+            // Last character is not a digit, add "0" to the end
+            instanceName = instanceName + '0';
+        }
+    }
+    
+    // Update the input field if the name was changed
+    if (instanceName !== originalName) {
+        document.getElementById('newInstanceName').value = instanceName;
+        showAlert(`Instance name changed to "${instanceName}" to avoid duplicate`, 'info');
     }
     
     try {
@@ -767,7 +1085,7 @@ async function addNewInstance() {
         const data = await response.json();
         
         if (response.ok) {
-            showPopupNotification('New set instance added successfully!', 'success');
+            showAlert('New set instance added successfully!', 'success');
             
             // Add the new instance to the display
             const newInstance = {
@@ -782,18 +1100,18 @@ async function addNewInstance() {
             
         } else {
             if (data.login_required) {
-                showPopupNotification('Please log in to add sets to your collection', 'warning');
+                showAlert('Please log in to add sets to your collection', 'warning');
                 // Optionally redirect to login page
                 setTimeout(() => {
                     window.location.href = '/login';
                 }, 2000);
             } else {
-                showPopupNotification(data.error || 'Failed to add set to collection', 'error');
+                showAlertNear(data.error || 'Failed to add set to collection', 'danger', '#instanceSelectionSection');
             }
         }
     } catch (error) {
         console.error('Error adding to collection:', error);
-        showPopupNotification('An error occurred while adding to collection', 'error');
+        showAlertNear('An error occurred while adding to collection', 'danger', '#instanceSelectionSection');
     }
 }
 
@@ -804,8 +1122,12 @@ function viewInstance(setNumber, instanceName) {
 }
 
 async function deleteSetInstance(owned_set_id, instanceName) {
-    if (!confirm(`Are you sure you want to delete the instance "${instanceName}"? This will also delete all inventory modifications for this instance.`)) {
-        return;
+    // Check if user has chosen to skip confirmation
+    if (!shouldSkipDeleteConfirmation()) {
+        const confirmed = await showDeleteConfirmation(instanceName, 'This will also delete all inventory modifications for this instance.');
+        if (!confirmed) {
+            return;
+        }
     }
     
     try {
@@ -822,28 +1144,29 @@ async function deleteSetInstance(owned_set_id, instanceName) {
         const data = await response.json();
         
         if (response.ok) {
-            showPopupNotification('Set instance deleted successfully!', 'success');
+            showAlert('Set instance deleted successfully!', 'success');
             
             // Check if the deleted instance was the currently viewed one
-            const deletedInstanceName = instanceName;
-            if (currentlySelectedInstance === deletedInstanceName) {
-                // Hide inventory and reset selection
-                document.getElementById('inventoryContainer').style.display = 'none';
-                currentlySelectedInstance = null;
-                currentInstanceName = 'Default';
-                hasUnsavedChanges = false;
-            }
+            // const deletedInstanceName = instanceName;
+            // if (currentlySelectedInstance === deletedInstanceName) {
+            //     // Hide inventory and reset selection
+            //     document.getElementById('inventoryContainer').style.display = 'none';
+            //     currentlySelectedInstance = null;
+            //     currentInstanceName = 'Default';
+            //     hasUnsavedChanges = false;
+            // }
             
             // Remove the deleted instance from the DOM
             removeInstanceFromDisplay(instanceName);
         } else {
-            showPopupNotification(data.error || 'Failed to delete set instance', 'error');
+            showAlert(data.error || 'Failed to delete set instance', 'danger');
         }
     } catch (error) {
         console.error('Error deleting set instance:', error);
-        showPopupNotification('An error occurred while deleting the set instance', 'error');
+        showAlert('An error occurred while deleting the set instance', 'danger');
     }
 }
+
 
 async function saveInventory() {
     if (!hasUnsavedChanges) {
@@ -867,16 +1190,16 @@ async function saveInventory() {
         const data = await response.json();
         
         if (response.ok) {
-            showPopupNotification('Inventory saved successfully!', 'success');
+            showAlert('Inventory saved successfully!', 'success');
             hasUnsavedChanges = false;
             // Hide the save button
             document.getElementById('saveInventoryBtn').style.display = 'none';
         } else {
-            showPopupNotification(data.error || 'Failed to save inventory', 'error');
+            showAlert(data.error || 'Failed to save inventory', 'danger');
         }
     } catch (error) {
         console.error('Error saving inventory:', error);
-        showPopupNotification('An error occurred while saving inventory', 'error');
+        showAlert('An error occurred while saving inventory', 'danger');
     }
 }
 </script>

@@ -145,6 +145,190 @@
                 transform: translateY(20px);
             }
         }
+
+        /* Sticky Footer Styles */
+        html, body {
+            height: 100%;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .content-wrapper {
+            flex: 1;
+        }
+        
+        .footer-spacer {
+            min-height: 60px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-top: 1px solid #dee2e6;
+            margin-top: 2rem;
+        }
+
+        /* Floating Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .toast-notification {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 10px;
+            border-left: 4px solid;
+            animation: slideUpIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .toast-notification.success {
+            border-left-color: #28a745;
+        }
+
+        .toast-notification.danger {
+            border-left-color: #dc3545;
+        }
+
+        .toast-notification.warning {
+            border-left-color: #ffc107;
+        }
+
+        .toast-notification.info {
+            border-left-color: #17a2b8;
+        }
+
+        .toast-content {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toast-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .toast-notification.success .toast-icon {
+            color: #28a745;
+        }
+
+        .toast-notification.danger .toast-icon {
+            color: #dc3545;
+        }
+
+        .toast-notification.warning .toast-icon {
+            color: #ffc107;
+        }
+
+        .toast-notification.info .toast-icon {
+            color: #17a2b8;
+        }
+
+        .toast-message {
+            flex: 1;
+            font-weight: 500;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .toast-close:hover {
+            color: #333;
+        }
+
+        .toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: rgba(0, 0, 0, 0.1);
+            animation: progressBar linear;
+        }
+
+        .toast-notification.success .toast-progress {
+            background: #28a745;
+        }
+
+        .toast-notification.danger .toast-progress {
+            background: #dc3545;
+        }
+
+        .toast-notification.warning .toast-progress {
+            background: #ffc107;
+        }
+
+        .toast-notification.info .toast-progress {
+            background: #17a2b8;
+        }
+
+        @keyframes slideUpIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideDownOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+        }
+
+        @keyframes progressBar {
+            from {
+                width: 100%;
+            }
+            to {
+                width: 0%;
+            }
+        }
+
+        /* Custom info classes */
+        .modification-info {
+            color: #0dcaf0 !important; /* Bootstrap info color */
+        }
+        
+        .minifig-info {
+            color: #0dcaf0 !important; /* Bootstrap info color */
+        }
     </style>
 </head>
 <body>
@@ -168,23 +352,28 @@
         </div>
     </nav>
 
-    <div class="container mt-4">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-info alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    <div class="main-content">
+        <div class="container mt-4 content-wrapper">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-        {% block content %}{% endblock %}
+            {% block content %}{% endblock %}
+        </div>
+        
+        <!-- Footer Spacer -->
+        <div class="footer-spacer"></div>
     </div>
 
     <!-- Footer -->
-    <footer class="bg-dark text-light mt-5 py-4">
+    <footer class="bg-dark text-light py-4">
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
@@ -216,6 +405,9 @@
             </div>
         </div>
     </footer>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
 
     <!-- Popup Notification Container -->
     <div id="popupNotification" class="popup-notification" style="display: none;">
