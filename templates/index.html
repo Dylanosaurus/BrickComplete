@@ -42,7 +42,7 @@
     </div>
     
     <div class="col-md-6">
-        <div class="card">
+        <div class="card" id="howItWorks">
             <div class="card-header">
                 <h5><i class="fas fa-info-circle"></i> How it Works</h5>
             </div>
@@ -61,24 +61,25 @@
                 {% endif %}
             </div>
         </div>
+        <!-- <div id="setInfo" class="row mt-4" style="display: none;">
+            <div class="col-12"> -->
+                <div class="card" id="setInfo" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
+                        <button class="btn btn-success" id="saveInventory" style="display: none;">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="setDetails"></div>
+                    </div>
+                </div>
+            <!-- </div>
+        </div> -->
     </div>
 </div>
 
-<div id="setInfo" class="row mt-4" style="display: none;">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
-                <button class="btn btn-success" id="saveInventory" style="display: none;">
-                    <i class="fas fa-save"></i> Save Changes
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="setDetails"></div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <div id="instanceSelectionSection" class="row mt-4" style="display: none;">
     <div class="col-12">
@@ -246,6 +247,14 @@ document.getElementById('setNumber').addEventListener('keydown', function(e) {
     }
 });
 
+// Add Enter key support for new instance name input
+document.getElementById('newInstanceName').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addNewInstance();
+    }
+});
+
 // Set suggestions are now fetched from the database
 
 // Global variables for suggestion navigation
@@ -254,6 +263,11 @@ let suggestionItems = [];
 let allSuggestions = []; // Store all suggestions (recent + autofill)
 let recentSearchSuggestions = []; // Store recent search suggestions
 let autofillSuggestions = []; // Store autofill suggestions
+
+// Global variables for instance navigation
+let currentInstanceIndex = -1;
+let instanceItems = [];
+let navigationInstance = false;
 
 function extractSetNumberFromSuggestion(suggestionItem) {
     // For recent search suggestions, extract the set number from the HTML structure
@@ -332,6 +346,20 @@ async function loadAutofillSuggestions(query) {
 function filterAndDisplaySuggestions(input) {
     const suggestionList = document.getElementById('suggestionList');
     const suggestionContainer = document.getElementById('setSuggestions');
+    
+    // Unhighlight any previously highlighted suggestions
+    if (suggestionItems.length > 0) {
+        suggestionItems.forEach(item => {
+            item.classList.remove('bg-primary', 'text-white');
+            item.classList.add('bg-light');
+            // Reset set name text color
+            const setNameElement = item.querySelector('small');
+            if (setNameElement) {
+                setNameElement.classList.remove('text-white');
+                setNameElement.classList.add('text-muted');
+            }
+        });
+    }
     
     // Clear current display
     suggestionList.innerHTML = '';
@@ -446,8 +474,48 @@ async function showSuggestions(input) {
 function hideSetSuggestions() {
     // document.getElementById('setSuggestions').style.display = 'none';
     // Reset navigation state
-    currentSuggestionIndex = -1;
-    suggestionItems = [];
+    // currentSuggestionIndex = -1;
+    // suggestionItems = [];
+}
+
+// // Instance navigation functions
+// function updateInstanceItems() {
+//     const instanceSelectionList = document.getElementById('instanceSelectionList');
+//     if (instanceSelectionList) {
+//         instanceItems = Array.from(instanceSelectionList.querySelectorAll('div[onclick*="instanceClicked"]'));
+//     }
+// }
+
+function navigateInstances(direction) {
+    if (!navigationInstance) {
+        return;
+    }
+    const instanceSelectionSection = document.getElementById('instanceSelectionSection');
+    if (instanceSelectionSection.style.display === 'none' || instanceItems.length === 0) {
+        return;
+    }
+    
+    // Update the current index
+    currentInstanceIndex += direction;
+    
+    // Wrap around if needed
+    if (currentInstanceIndex < 0) {
+        currentInstanceIndex = instanceItems.length - 1;
+    } else if (currentInstanceIndex >= instanceItems.length) {
+        currentInstanceIndex = 0;
+    }
+    
+    // Call selectInstance with the current instance
+    if (currentInstanceIndex >= 0 && currentInstanceIndex < instanceItems.length) {
+        const currentItem = instanceItems[currentInstanceIndex].instance_name;
+        selectInstance(currentSetNumber, currentItem);
+    }
+}
+
+function resetInstanceNavigation() {
+    // currentInstanceIndex = -1;
+    // instanceItems = [];
+    navigationInstance = false;
 }
 
 // Hide suggestions when clicking outside
@@ -458,6 +526,27 @@ document.addEventListener('click', function(e) {
     if (!setNumberInput.contains(e.target) && !suggestions.contains(e.target)) {
         hideSetSuggestions();
     }
+    
+    // Reset instance navigation when clicking outside instance selection
+    const instanceSelectionSection = document.getElementById('instanceSelectionSection');
+    if (instanceSelectionSection && !instanceSelectionSection.contains(e.target)) {
+        resetInstanceNavigation();
+    }
+});
+
+// Global keyboard navigation for instances
+document.addEventListener('keydown', function(e) {
+    // Only handle arrow keys when instance selection section is visible and has instances
+    const instanceSelectionSection = document.getElementById('instanceSelectionSection');
+    if (instanceSelectionSection && instanceSelectionSection.style.display !== 'none' && instanceItems.length > 0) {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateInstances(-1);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateInstances(1);
+        }
+    }
 });
 
 async function searchSet(setNumber) {
@@ -465,10 +554,9 @@ async function searchSet(setNumber) {
     currentlySelectedInstance = null; // Reset selected instance for new search
     
     // Hide previous results and show loading
-    // document.getElementById('setInfo').style.display = 'none';
+    document.getElementById('howItWorks').style.display = 'none';
     // document.getElementById('instanceSelectionSection').style.display = 'none';
     document.getElementById('inventoryContainer').style.display = 'none';
-    // showLoading(true);
     
     try {
         const response = await fetch('/search_set', {
@@ -487,6 +575,7 @@ async function searchSet(setNumber) {
             addToRecentSearches(setNumber, data.set_name);
             // Clear the search bar after successful search
             document.getElementById('setNumber').value = '';
+            // showSuggestions('');
             // hideSetSuggestions();
             // Don't load inventory here - let displaySetInfo handle instance selection first
         } else {
@@ -495,7 +584,6 @@ async function searchSet(setNumber) {
     } catch (error) {
         showAlert('Network error: ' + error.message, 'danger');
     } finally {
-        showLoading(false);
     }
 }
 
@@ -546,12 +634,12 @@ async function displaySetInfo(data) {
     document.getElementById('setDetails').innerHTML = setDetailsHTML;
     document.getElementById('setInfo').style.display = 'block';
     
-    // Check for existing instances
-    const existingInstances = await getInstances(data.set_number);
+    // Check for instances
+    instanceItems = await getInstances(data.set_number);
     
-    displayInstances(existingInstances, data.set_number);
-    if (existingInstances.length > 0) {
-        selectInstance(data.set_number, existingInstances[0].instance_name);
+    displayInstances(instanceItems, data.set_number);
+    if (instanceItems.length > 0) {
+        selectInstance(data.set_number, instanceItems[0].instance_name);
     }
     document.getElementById('instanceSelectionSection').style.display = 'block';
 }
@@ -832,7 +920,7 @@ function displayInstances(instances, setNumber) {
             instanceDiv.className = 'alert alert-success d-flex justify-content-between align-items-center mb-2 border border-success border-2';
             instanceDiv.style.cursor = 'pointer';
             instanceDiv.innerHTML = `
-                <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+                <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
                     <strong>${instance.instance_name} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span></strong>
                     <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
                 </div>
@@ -846,7 +934,7 @@ function displayInstances(instances, setNumber) {
             instanceDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
             instanceDiv.style.cursor = 'pointer';
             instanceDiv.innerHTML = `
-                <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+                <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
                     <strong>${instance.instance_name}</strong>
                     <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
                 </div>
@@ -860,11 +948,14 @@ function displayInstances(instances, setNumber) {
         
         instanceSelectionList.appendChild(instanceDiv);
     });
+    
+    // Update instance items for keyboard navigation
+    // updateInstanceItems();
 }
 
 function updateInstanceSelectionDisplay(setNumber, selectedInstanceName) {
     const instanceSelectionList = document.getElementById('instanceSelectionList');
-    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="instanceClicked"]');
     
     instanceDivs.forEach(instanceDiv => {
         const parentDiv = instanceDiv.closest('.alert');
@@ -891,7 +982,7 @@ function updateInstanceSelectionDisplay(setNumber, selectedInstanceName) {
 function removeInstanceFromDisplay(instanceName) {
     const instanceSelectionList = document.getElementById('instanceSelectionList');
     const instanceSelectionText = document.getElementById('instanceSelectionText');
-    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+    const instanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="instanceClicked"]');
     
     let deletedInstanceIndex = -1;
     let deletedInstanceDiv = null;
@@ -905,6 +996,7 @@ function removeInstanceFromDisplay(instanceName) {
             deletedInstanceDiv = instanceDiv;
         }
     });
+    instanceItems.splice(deletedInstanceIndex, 1);
     
     // Check if the deleted instance is currently selected
     const wasCurrentlySelected = currentlySelectedInstance === instanceName;
@@ -917,7 +1009,7 @@ function removeInstanceFromDisplay(instanceName) {
     
     // If the deleted instance was currently selected, select another instance
     if (wasCurrentlySelected) {
-        const remainingInstanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="selectInstance"]');
+        const remainingInstanceDivs = instanceSelectionList.querySelectorAll('div[onclick*="instanceClicked"]');
         
         if (remainingInstanceDivs.length > 0) {
             // Try to select the instance at the same index (below), or the one above if none below
@@ -942,6 +1034,8 @@ function removeInstanceFromDisplay(instanceName) {
     const remainingInstances = instanceSelectionList.querySelectorAll('.alert');
     if (remainingInstances.length === 0) {
         instanceSelectionText.textContent = 'You don\'t have any instances of this set yet. Add your first instance below:';
+        // Reset instance navigation when no instances remain
+        resetInstanceNavigation();
     }
 }
 
@@ -954,7 +1048,7 @@ function addInstanceToDisplay(instance, setNumber) {
     instanceDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
     instanceDiv.style.cursor = 'pointer';
     instanceDiv.innerHTML = `
-        <div onclick="selectInstance('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
+        <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
             <strong>${instance.instance_name}</strong>
             <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
         </div>
@@ -970,6 +1064,14 @@ function addInstanceToDisplay(instance, setNumber) {
     
     // Update the descriptive text since we now have instances
     instanceSelectionText.textContent = 'You have existing instances of this set. Choose which one to view or add a new instance:';
+    
+    // Update instance items for keyboard navigation
+    instanceItems.push(instance);
+}
+
+function instanceClicked(setNumber, instanceName) {
+    navigationInstance = true;
+    selectInstance(setNumber, instanceName);
 }
 
 async function selectInstance(setNumber, instanceName) {
@@ -980,9 +1082,12 @@ async function selectInstance(setNumber, instanceName) {
     
     // If switching to a different instance, hide current inventory first
     if (currentlySelectedInstance && currentlySelectedInstance !== instanceName) {
-        document.getElementById('inventoryContainer').style.display = 'none';
         hasUnsavedChanges = false;
     }
+
+    // Set the current instance index for arrow key navigation
+    // updateInstanceItems();
+    currentInstanceIndex = instanceItems.findIndex(item => item.instance_name === instanceName);
     
     // Set current instance for inventory modifications
     currentInstanceName = instanceName;
@@ -992,8 +1097,6 @@ async function selectInstance(setNumber, instanceName) {
     updateInstanceSelectionDisplay(setNumber, instanceName);
     
     try {
-        showLoading(true);
-        
         const response = await fetch('/view_instance_inventory', {
             method: 'POST',
             headers: {
@@ -1018,7 +1121,6 @@ async function selectInstance(setNumber, instanceName) {
         console.error('Error selecting instance:', error);
         showAlert('An error occurred while loading the instance', 'danger');
     } finally {
-        showLoading(false);
     }
 }
 
