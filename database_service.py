@@ -117,10 +117,13 @@ class LegoDatabaseService:
             # Combine and process all parts
             all_parts = set_parts + minifig_parts
             
-            # Group parts by part_num + color_id and sum quantities
+            # Group parts by part_num + color_id + is_spare + is_minifig_part to keep categories separate
             part_groups = {}
             for row in all_parts:
-                key = (row['part_num'], row['color_id'])
+                # Create a unique key that includes spare and minifig status
+                is_minifig = row['source_type'] == 'minifig'
+                key = (row['part_num'], row['color_id'], bool(row['is_spare']), is_minifig)
+                
                 if key in part_groups:
                     # Add to existing part
                     part_groups[key]['quantity'] += row['quantity']
@@ -143,6 +146,7 @@ class LegoDatabaseService:
                         'color_rgb': row['color_rgb'],
                         'quantity': row['quantity'],
                         'is_spare': bool(row['is_spare']),
+                        'is_minifig_part': is_minifig,
                         'part_image_url': row['part_image_url'],
                         'part_category': row['part_category'],
                         'source_type': row['source_type']
@@ -169,7 +173,6 @@ class LegoDatabaseService:
             
             # Sort by spare status, then by color (prioritizing color ID 9999), then by part category, then by part name
             inventory.sort(key=lambda x: (x['is_spare'], x['color_id'] != 9999, x['color_name'], x['part_category'] or '', x['part_name']))
-            
             return inventory
     
     def get_part_image_url(self, part_num: str, color_id: int) -> str:

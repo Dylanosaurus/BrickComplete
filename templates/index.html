@@ -655,13 +655,14 @@ function displayInventory(inventory) {
     // Create a map of original inventory for quick lookup and store globally
     originalInventoryMap = {};
     inventory.forEach(part => {
-        const key = `${part.part_number}_${part.color_id}`;
+        // Include category information in the key to keep parts separate
+        const key = `${part.part_number}_${part.color_id}_${part.is_spare ? 'spare' : 'regular'}_${part.is_minifig_part ? 'minifig' : 'normal'}`;
         originalInventoryMap[key] = part;
     });
     
-    // Separate parts by type and spare status
-    const regularParts = inventory.filter(part => !part.is_spare && (!part.minifig_sources || part.minifig_sources.length === 0));
-    const minifigParts = inventory.filter(part => !part.is_spare && part.minifig_sources && part.minifig_sources.length > 0);
+    // Separate parts by type and spare status using the new is_minifig_part field
+    const regularParts = inventory.filter(part => !part.is_spare && !part.is_minifig_part);
+    const minifigParts = inventory.filter(part => !part.is_spare && part.is_minifig_part);
     const spareParts = inventory.filter(part => part.is_spare);
     
     // Sort regular parts to put "No Color/Any Color" (color ID 9999) at the top
@@ -724,7 +725,8 @@ function displayInventory(inventory) {
 }
 
 function createPartCard(part, originalMap = {}) {
-    const partKey = `${part.part_number}_${part.color_id}`;
+    // Generate part key that includes category information
+    const partKey = `${part.part_number}_${part.color_id}_${part.is_spare ? 'spare' : 'regular'}_${part.is_minifig_part ? 'minifig' : 'normal'}`;
     const modifiedQty = modifiedInventory[partKey] || 0;
     
     // Get original quantity from the original inventory map

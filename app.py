@@ -61,6 +61,7 @@ class UserInventoryPart(db.Model):
     color_name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     is_spare = db.Column(db.Boolean, default=False)
+    is_minifig_part = db.Column(db.Boolean, default=False)  # Indicates if this part belongs to a minifigure
     part_image_url = db.Column(db.String(500), nullable=True)
     notes = db.Column(db.Text, nullable=True)  # User notes about this part
     
@@ -333,6 +334,7 @@ def add_part_to_inventory():
     color_name = data.get('color_name')
     quantity = data.get('quantity', 1)
     is_spare = data.get('is_spare', False)
+    is_minifig_part = data.get('is_minifig_part', False)
     part_image_url = data.get('part_image_url', '')
     notes = data.get('notes', '')
     
@@ -359,6 +361,7 @@ def add_part_to_inventory():
         # Update existing part
         existing_part.quantity = quantity
         existing_part.is_spare = is_spare
+        existing_part.is_minifig_part = is_minifig_part
         existing_part.notes = notes
         if part_image_url:
             existing_part.part_image_url = part_image_url
@@ -372,6 +375,7 @@ def add_part_to_inventory():
             color_name=color_name,
             quantity=quantity,
             is_spare=is_spare,
+            is_minifig_part=is_minifig_part,
             part_image_url=part_image_url,
             notes=notes
         )
@@ -402,6 +406,7 @@ def get_inventory_parts(user_inventory_id):
             'color_name': part.color_name,
             'quantity': part.quantity,
             'is_spare': part.is_spare,
+            'is_minifig_part': part.is_minifig_part,
             'part_image_url': part.part_image_url,
             'notes': part.notes
         })

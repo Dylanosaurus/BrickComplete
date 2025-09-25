@@ -84,7 +84,7 @@ def create_database_schema(cursor):
             quantity INTEGER,
             is_spare BOOLEAN,
             img_url TEXT,
-            PRIMARY KEY (inventory_id, part_num, color_id),
+            PRIMARY KEY (inventory_id, part_num, color_id, is_spare),
             FOREIGN KEY (inventory_id) REFERENCES inventories (id),
             FOREIGN KEY (part_num) REFERENCES parts (part_num),
             FOREIGN KEY (color_id) REFERENCES colors (id)
