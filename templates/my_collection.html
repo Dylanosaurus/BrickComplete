@@ -8,28 +8,53 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-cube"></i> My LEGO Collection</h2>
-                <a href="{{ url_for('index') }}" class="btn btn-primary">
-                    <i class="fas fa-search"></i> Search Sets
-                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="sortSelect" class="form-label mb-0"><i class="fas fa-sort"></i> Sort by:</label>
+                        <select id="sortSelect" class="form-select form-select-sm" style="width: auto;" onchange="sortCollection()">
+                            <option value="date_added">Date Added</option>
+                            <option value="set_number">Set Number</option>
+                            <option value="set_name">Set Name</option>
+                            <option value="instance_name">Instance Name</option>
+                        </select>
+                    </div>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Search Sets
+                    </a>
+                </div>
             </div>
             
             {% if user_sets %}
                 <div class="row">
                     {% for user_set in user_sets %}
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-4 mb-3 collection-card" 
+                         data-set-number="{{ user_set.set_number }}"
+                         data-set-name="{{ user_set.set.set_name if user_set.set else 'Unknown Set' }}"
+                         data-instance-name="{{ user_set.custom_display_name }}"
+                         data-date-added="{{ user_set.added_at.isoformat() }}">
                         <div class="card h-100">
                             {% if user_set.set and user_set.set.set_image %}
                                 {% if user_set.set.set_url %}
                                     <a href="{{ user_set.set.set_url }}" target="_blank" rel="noopener noreferrer" title="View set on official website">
-                                        <img src="{{ user_set.set.set_image }}" class="card-img-top" alt="{{ user_set.set.set_name }}" style="height: 200px; object-fit: cover; cursor: pointer;">
+                                        <img src="{{ user_set.set.set_image }}" 
+                                             class="card-img-top" 
+                                             alt="{{ user_set.set.set_name }}" 
+                                             style="height: 200px; object-fit: contain; cursor: pointer;"
+                                             onerror="this.src='https://img.bricklink.com/ItemImage/SN/0/{{ user_set.set_number }}.png'; this.onerror=function(){this.style.display='none'; this.nextElementSibling.style.display='flex';};">
                                     </a>
                                 {% else %}
-                                    <img src="{{ user_set.set.set_image }}" class="card-img-top" alt="{{ user_set.set.set_name }}" style="height: 200px; object-fit: cover;">
+                                    <img src="{{ user_set.set.set_image }}" 
+                                         class="card-img-top" 
+                                         alt="{{ user_set.set.set_name }}" 
+                                         style="height: 200px; object-fit: contain;"
+                                         onerror="this.src='https://img.bricklink.com/ItemImage/SN/0/{{ user_set.set_number }}.png'; this.onerror=function(){this.style.display='none'; this.nextElementSibling.style.display='flex';};">
                                 {% endif %}
                             {% else %}
-                                <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height: 200px;">
-                                    <i class="fas fa-cube fa-3x text-muted"></i>
-                                </div>
+                                <img src="https://img.bricklink.com/ItemImage/SN/0/{{ user_set.set_number }}.png" 
+                                     class="card-img-top" 
+                                     alt="{{ user_set.set.set_name if user_set.set else 'Set ' + user_set.set_number }}" 
+                                     style= "object-fit: contain;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                             {% endif %}
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -43,7 +68,14 @@
                                 <h6 class="card-subtitle mb-2 text-muted">{{ user_set.set.set_name if user_set.set else 'Unknown Set' }}</h6>
                                 <p class="card-text">
                                     <small class="text-muted">
-                                        <i class="fas fa-tag"></i> Instance: <strong>{{ user_set.custom_display_name }}</strong><br>
+                                        <i class="fas fa-tag"></i> Instance: 
+                                        <span class="editable-name" 
+                                              data-inventory-id="{{ user_set.user_inventory_id }}" 
+                                              data-current-name="{{ user_set.custom_display_name }}"
+                                              style="cursor: pointer; border-bottom: 1px dashed #6c757d;"
+                                              title="Click to edit name">
+                                            <strong>{{ user_set.custom_display_name }}</strong>
+                                        </span><br>
                                         <i class="fas fa-calendar"></i> Added: {{ user_set.added_at.strftime('%B %d, %Y') }}
                                     </small>
                                 </p>
@@ -119,26 +151,65 @@ async function removeFromCollection(collectionId) {
 }
 
 function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    // Get or create toast container
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    // Set icon based on type
+    let icon = 'fas fa-check-circle';
+    switch(type) {
+        case 'success':
+            icon = 'fas fa-check-circle';
+            break;
+        case 'danger':
+            icon = 'fas fa-exclamation-circle';
+            break;
+        case 'warning':
+            icon = 'fas fa-exclamation-triangle';
+            break;
+        case 'info':
+            icon = 'fas fa-info-circle';
+            break;
+    }
+    
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="toast-icon ${icon}"></i>
+            <span class="toast-message">${message}</span>
+            <button class="toast-close" onclick="this.parentElement.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="toast-progress" style="animation-duration: 3s;"></div>
     `;
     
-    const container = document.querySelector('.container');
-    container.insertBefore(alertDiv, container.firstChild);
+    // Add to container
+    toastContainer.appendChild(toast);
     
     // Auto-dismiss after 3 seconds
     setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
+        if (toast.parentNode) {
+            toast.style.animation = 'slideDownOut 0.3s ease-out';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
         }
     }, 3000);
 }
 
 function updateTotalCount() {
-    const cards = document.querySelectorAll('.col-md-6');
+    const cards = document.querySelectorAll('.collection-card');
     const count = cards.length;
     const alertDiv = document.querySelector('.alert-info');
     
@@ -151,6 +222,194 @@ function updateTotalCount() {
     if (count === 0) {
         location.reload();
     }
+}
+
+function sortCollection() {
+    const sortBy = document.getElementById('sortSelect').value;
+    const container = document.querySelector('.row');
+    const cards = Array.from(document.querySelectorAll('.collection-card'));
+    
+    // Sort the cards based on the selected criteria
+    cards.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortBy) {
+            case 'date_added':
+                aValue = new Date(a.dataset.dateAdded);
+                bValue = new Date(b.dataset.dateAdded);
+                return bValue - aValue; // Newest first
+                
+            case 'set_number':
+                aValue = a.dataset.setNumber;
+                bValue = b.dataset.setNumber;
+                return aValue.localeCompare(bValue, undefined, { numeric: true });
+                
+            case 'set_name':
+                aValue = a.dataset.setName.toLowerCase();
+                bValue = b.dataset.setName.toLowerCase();
+                return aValue.localeCompare(bValue);
+                
+            case 'instance_name':
+                aValue = a.dataset.instanceName.toLowerCase();
+                bValue = b.dataset.instanceName.toLowerCase();
+                return aValue.localeCompare(bValue);
+                
+            default:
+                return 0;
+        }
+    });
+    
+    // Re-append the sorted cards to the container
+    cards.forEach(card => {
+        container.appendChild(card);
+    });
+}
+
+// Inline editing functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click event listeners to all editable names
+    document.querySelectorAll('.editable-name').forEach(element => {
+        element.addEventListener('click', function() {
+            startEditing(this);
+        });
+    });
+});
+
+function startEditing(element) {
+    const currentName = element.dataset.currentName;
+    const inventoryId = element.dataset.inventoryId;
+    
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'form-control form-control-sm';
+    input.style.display = 'inline-block';
+    input.style.width = '150px';
+    input.style.fontSize = '0.875rem';
+    input.style.fontWeight = 'bold';
+    
+    // Create save button
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-success btn-sm ms-1';
+    saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+    saveBtn.style.fontSize = '0.75rem';
+    saveBtn.style.padding = '0.25rem 0.5rem';
+    
+    // Create cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary btn-sm ms-1';
+    cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+    cancelBtn.style.fontSize = '0.75rem';
+    cancelBtn.style.padding = '0.25rem 0.5rem';
+    
+    // Store original content
+    const originalContent = element.innerHTML;
+    
+    // Replace content with input and buttons
+    element.innerHTML = '';
+    element.appendChild(input);
+    element.appendChild(saveBtn);
+    element.appendChild(cancelBtn);
+    
+    // Focus the input
+    input.focus();
+    input.select();
+    
+    // Save function
+    const save = async () => {
+        const newName = input.value.trim();
+        
+        if (newName === currentName) {
+            // No change, just cancel
+            cancel();
+            return;
+        }
+        
+        if (newName.length === 0) {
+            showAlert('Name cannot be empty', 'warning');
+            input.focus();
+            return;
+        }
+        
+        // Check if name is already taken by another instance
+        const existingNames = Array.from(document.querySelectorAll('.editable-name'))
+            .map(el => el.dataset.currentName)
+            .filter(name => name !== currentName);
+        
+        if (existingNames.includes(newName)) {
+            showAlert('An instance with this name already exists', 'warning');
+            input.focus();
+            return;
+        }
+        
+        try {
+            const response = await fetch('/update_inventory_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_inventory_id: inventoryId,
+                    new_name: newName
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Update the element with new name
+                element.innerHTML = `<strong>${newName}</strong>`;
+                element.dataset.currentName = newName;
+                showAlert('Name updated successfully!', 'success');
+            } else {
+                showAlert(data.error || 'Failed to update name', 'danger');
+                cancel();
+            }
+        } catch (error) {
+            console.error('Error updating name:', error);
+            showAlert('An error occurred while updating the name', 'danger');
+            cancel();
+        }
+    };
+    
+    // Cancel function
+    const cancel = () => {
+        element.innerHTML = originalContent;
+    };
+    
+    // Event listeners
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        save();
+    });
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancel();
+    });
+    
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+        }
+    });
+    
+    // Click outside to cancel
+    const clickOutside = (e) => {
+        if (!element.contains(e.target)) {
+            cancel();
+            document.removeEventListener('click', clickOutside);
+        }
+    };
+    
+    // Add event listener after a short delay to prevent immediate cancellation
+    setTimeout(() => {
+        document.addEventListener('click', clickOutside);
+    }, 100);
 }
 </script>
 {% endblock %}

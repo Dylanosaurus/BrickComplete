@@ -5,10 +5,16 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Length
 import os
+import requests
+import urllib3
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from datetime import datetime, UTC
 from functools import wraps
 from database_service import db_service
+
+# Disable SSL warnings for development
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 load_dotenv()
 
@@ -579,7 +585,8 @@ def get_modified_inventory(set_number):
     # Build the modifications object
     modifications = {}
     for part in inventory.parts:
-        key = f"{part.part_number}_{part.color_id}"
+        # Use the new part key format: part_number_color_id_spare_status_minifig_status
+        key = f"{part.part_number}_{part.color_id}_{'spare' if part.is_spare else 'regular'}_{'minifig' if part.is_minifig_part else 'normal'}"
         modifications[key] = part.quantity
     
     return jsonify(modifications)
@@ -591,6 +598,9 @@ def update_inventory():
     data = request.json
     set_number = data.get('set_number')
     instance_name = data.get('instance_name', 'Default')
+    
+    print(f"DEBUG: Received update_inventory request for set {set_number}, instance {instance_name}")
+    print(f"DEBUG: Modifications data: {data.get('modifications', {})}")
     
     if not set_number:
         return jsonify({'error': 'Set number is required'}), 400
@@ -615,13 +625,28 @@ def update_inventory():
         # Add new parts
         for part_key, quantity in modifications.items():
             if quantity != 0:  # Only save non-zero modifications
-                part_number, color_id = part_key.split('_')
+                print(f"DEBUG: Processing part_key: {part_key}, quantity: {quantity}")
+                # Parse the new part key format: part_number_color_id_spare_status_minifig_status
+                key_parts = part_key.split('_')
+                if len(key_parts) >= 4:
+                    part_number = key_parts[0]
+                    color_id = int(key_parts[1])
+                    is_spare = key_parts[2] == 'spare'
+                    is_minifig_part = key_parts[3] == 'minifig'
+                    print(f"DEBUG: Parsed - part_number: {part_number}, color_id: {color_id}, is_spare: {is_spare}, is_minifig_part: {is_minifig_part}")
+                else:
+                    # Fallback for old format
+                    part_number = key_parts[0]
+                    color_id = int(key_parts[1])
+                    is_spare = False
+                    is_minifig_part = False
+                    print(f"DEBUG: Using fallback format - part_number: {part_number}, color_id: {color_id}")
                 
                 # Get part info from LEGO database
                 lego_inventory = db_service.get_set_inventory(set_number)
                 part_info = None
                 for part in lego_inventory:
-                    if part['part_number'] == part_number and part['color_id'] == int(color_id):
+                    if part['part_number'] == part_number and part['color_id'] == color_id:
                         part_info = part
                         break
                 
@@ -630,10 +655,11 @@ def update_inventory():
                         user_inventory_id=inventory.user_inventory_id,
                         part_number=part_number,
                         part_name=part_info['part_name'],
-                        color_id=int(color_id),
+                        color_id=color_id,
                         color_name=part_info['color_name'],
                         quantity=quantity,
-                        is_spare=part_info.get('is_spare', False),
+                        is_spare=is_spare,
+                        is_minifig_part=is_minifig_part,
                         part_image_url=part_info.get('part_image_url', '')
                     )
                     db.session.add(new_part)
@@ -642,6 +668,182 @@ def update_inventory():
         return jsonify({'success': True, 'message': 'Inventory saved successfully'})
     
     return jsonify({'error': 'No modifications provided'}), 400
+
+@app.route('/check_instructions', methods=['POST'])
+def check_instructions():
+    """Check if building instructions exist for a set"""
+    data = request.json
+    set_number = data.get('set_number')
+    
+    if not set_number:
+        return jsonify({'error': 'Set number required'}), 400
+    
+    try:
+        # Construct the LEGO building instructions URL
+        instructions_url = f"https://www.lego.com/en-us/service/building-instructions/{set_number}"
+        # Make a GET request to get the page content
+        # Disable SSL verification for development (not recommended for production)
+        response = requests.get(instructions_url, timeout=15, allow_redirects=True, verify=False)
+        
+        # Check if the response is successful (200-299 range)
+        if response.status_code != 200:
+            return jsonify({
+                'has_instructions': False,
+                'status_code': response.status_code,
+                'url': instructions_url
+            })
+        
+        # Parse the HTML content to look for the specific data-test attribute
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Look for element with data-test="select-instruction-heading"
+        instruction_heading = soup.find(attrs={'data-test': 'select-instruction-heading'})
+        
+        has_instructions = instruction_heading is not None
+        
+        return jsonify({
+            'has_instructions': has_instructions,
+            'status_code': response.status_code,
+            'url': instructions_url
+        })
+        
+    except requests.exceptions.RequestException as e:
+        # If there's an error (network issue, timeout, etc.), assume no instructions
+        return jsonify({
+            'has_instructions': False,
+            'error': str(e)
+        })
+    except Exception as e:
+        return jsonify({
+            'has_instructions': False,
+            'error': f'Parsing error: {str(e)}'
+        })
+
+@app.route('/get_instruction_images', methods=['POST'])
+def get_instruction_images():
+    """Scrape building instruction images from brickinstructions.com"""
+    data = request.json
+    set_number = data.get('set_number')
+    
+    if not set_number:
+        return jsonify({'error': 'Set number required'}), 400
+    
+    try:
+        # Construct the brickinstructions.com URL
+        instructions_url = f"https://lego.brickinstructions.com/lego_instructions/set/{set_number}"
+        
+        # Make a request to get the page content
+        response = requests.get(instructions_url, timeout=15, verify=False)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Page not found (status: {response.status_code})'
+            })
+        
+        # Parse the HTML content
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Find the instructionscontainer div
+        instructions_container = soup.find('div', {'id': 'instructionsContainer'})
+        
+        if not instructions_container:
+            return jsonify({
+                'success': False,
+                'error': 'Instructions container not found'
+            })
+        
+        # Find all images in the container
+        images = instructions_container.find_all('img')
+        
+        if not images:
+            return jsonify({
+                'success': False,
+                'error': 'No instruction images found'
+            })
+        
+        # Extract image URLs
+        image_urls = []
+        for img in images:
+            src = img.get('src')
+            if src:
+                # Convert relative URLs to absolute URLs
+                if src.startswith('/'):
+                    src = f"https://lego.brickinstructions.com{src}"
+                elif not src.startswith('http'):
+                    src = f"https://lego.brickinstructions.com/{src}"
+                
+                # Replace "thumbnails" with "instructions" for higher quality images
+                src = src.replace('thumbnails', 'instructions')
+                
+                image_urls.append(src)
+        
+        return jsonify({
+            'success': True,
+            'images': image_urls,
+            'count': len(image_urls),
+            'url': instructions_url
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            'success': False,
+            'error': f'Network error: {str(e)}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Parsing error: {str(e)}'
+        })
+
+@app.route('/update_inventory_name', methods=['POST'])
+@login_required_json
+def update_inventory_name():
+    """Update the name of a user inventory"""
+    data = request.json
+    user_inventory_id = data.get('user_inventory_id')
+    new_name = data.get('new_name')
+    
+    if not user_inventory_id or not new_name:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if len(new_name.strip()) == 0:
+        return jsonify({'error': 'Name cannot be empty'}), 400
+    
+    try:
+        # Find the inventory
+        inventory = UserInventory.query.filter_by(
+            user_inventory_id=user_inventory_id,
+            user_id=current_user.user_id
+        ).first()
+        
+        if not inventory:
+            return jsonify({'error': 'Inventory not found'}), 404
+        
+        # Check if another inventory with the same set number and name already exists
+        existing_inventory = UserInventory.query.filter_by(
+            set_number=inventory.set_number,
+            inventory_name=new_name.strip(),
+            user_id=current_user.user_id
+        ).filter(UserInventory.user_inventory_id != user_inventory_id).first()
+        
+        if existing_inventory:
+            return jsonify({'error': 'An instance with this name already exists for this set'}), 400
+        
+        # Update the name
+        inventory.inventory_name = new_name.strip()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Inventory name updated successfully',
+            'new_name': inventory.inventory_name
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update inventory name: {str(e)}'}), 500
 
 if __name__ == '__main__':
     with app.app_context():

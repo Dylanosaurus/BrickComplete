@@ -78,6 +78,16 @@
             border-color: #6c757d;
             background-color: transparent;
         }
+        
+        /* Instruction button transitions to prevent flicker */
+        #legoInstructionsBtn, #buildingInstructionsBtn {
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+        
+        #legoInstructionsBtn.show, #buildingInstructionsBtn.show {
+            opacity: 1;
+        }
 
         /* Popup Notification Styles */
         .popup-notification {

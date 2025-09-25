@@ -61,21 +61,25 @@
                 {% endif %}
             </div>
         </div>
-        <!-- <div id="setInfo" class="row mt-4" style="display: none;">
-            <div class="col-12"> -->
-                <div class="card" id="setInfo" style="display: none;">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
-                        <button class="btn btn-success" id="saveInventory" style="display: none;">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="setDetails"></div>
-                    </div>
+        <div class="card" id="setInfo" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center" style="height: 120px;">
+                  <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
+                  <div class="d-flex flex-column align-items-end gap-2">
+                      <button id="legoInstructionsBtn" class="btn btn-outline-primary" onclick="openLegoInstructions()" style="display: none;">
+                          <i class="fas fa-external-link-alt"></i> Lego Instructions
+                      </button>
+                      <button id="buildingInstructionsBtn" class="btn btn-outline-info" onclick="openBuildingInstructions()" style="display: none;">
+                          <i class="fas fa-book"></i> BrickInstructions
+                      </button>
+                    <button class="btn btn-success" id="saveInventory" style="display: none;">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
                 </div>
-            <!-- </div>
-        </div> -->
+            </div>
+            <div class="card-body" style="height: 404px;">
+                <div id="setDetails"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -120,6 +124,17 @@
                     </button>
                 </div>
             </div>
+            <div id="colorFilterPanel" class="card-body" style="border-bottom: 1px solid #dee2e6;">
+                <h6 class="mb-3"><i class="fas fa-palette"></i> Filter by Color</h6>
+                <div id="colorFilterButtons" class="d-flex flex-wrap gap-2">
+                    <!-- Color filter buttons will be dynamically generated here -->
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearColorFilter()">
+                        <i class="fas fa-times"></i> Clear All Filters
+                    </button>
+                </div>
+            </div>
             <div class="card-body">
                 <div id="inventoryList"></div>
             </div>
@@ -133,12 +148,33 @@
     </div>
     <p class="mt-2">Loading set information...</p>
 </div>
+
+<!-- Instruction Images Modal -->
+<div class="modal fade" id="instructionModal" tabindex="-1" aria-labelledby="instructionModalLabel">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                       <h5 class="modal-title" id="instructionModalLabel">
+                           <i class="fas fa-book"></i> BrickInstructions
+                       </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="instructionImages" class="text-center">
+                    <!-- Instruction images will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script>
-let currentSetNumber = '';
 let modifiedInventory = {};
 let currentInstanceName = 'Default';
 let hasUnsavedChanges = false;
@@ -148,6 +184,11 @@ let originalInventoryMap = {};
 // Recent searches functionality
 const RECENT_SEARCHES_KEY = 'brickcomplete_recent_searches';
 const MAX_RECENT_SEARCHES = 5;
+
+// Instruction availability cache functionality
+const INSTRUCTION_CACHE_KEY = 'brickcomplete_instruction_cache';
+const MAX_CACHED_SETS = 20;
+let instructionCache = {}; // Global cache variable
 
 function getRecentSearches() {
     try {
@@ -192,6 +233,56 @@ function addToRecentSearches(setNumber, setName) {
     
     // Refresh recent search suggestions
     loadRecentSearchSuggestions();
+}
+
+// Instruction availability cache functions
+function loadInstructionCache() {
+    try {
+        const stored = localStorage.getItem(INSTRUCTION_CACHE_KEY);
+        instructionCache = stored ? JSON.parse(stored) : {};
+    } catch (error) {
+        console.error('Error loading instruction cache:', error);
+        instructionCache = {};
+    }
+}
+
+function saveInstructionCache() {
+    try {
+        localStorage.setItem(INSTRUCTION_CACHE_KEY, JSON.stringify(instructionCache));
+    } catch (error) {
+        console.error('Error saving instruction cache:', error);
+    }
+}
+
+function getCachedInstructionAvailability(setNumber) {
+    return instructionCache[setNumber] || null;
+}
+
+function setCachedInstructionAvailability(setNumber, legoAvailable, brickAvailable) {
+    // Add new entry to global cache
+    instructionCache[setNumber] = {
+        lego: legoAvailable,
+        brick: brickAvailable,
+        timestamp: Date.now()
+    };
+    
+    // Keep only the most recent entries
+    const entries = Object.entries(instructionCache);
+    if (entries.length > MAX_CACHED_SETS) {
+        // Sort by timestamp and keep only the most recent
+        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        const recentEntries = entries.slice(0, MAX_CACHED_SETS);
+        
+        // Rebuild global cache with only recent entries
+        const newCache = {};
+        recentEntries.forEach(([setNum, data]) => {
+            newCache[setNum] = data;
+        });
+        instructionCache = newCache;
+    }
+    
+    // Save to localStorage
+    saveInstructionCache();
 }
 
 document.getElementById('searchForm').addEventListener('submit', function(e) {
@@ -292,7 +383,6 @@ function createRecentSearchSuggestion(search) {
         </div>
     `;
     suggestionItem.addEventListener('click', function() {
-        document.getElementById('setNumber').value = search.setNumber;
         hideSetSuggestions();
         searchSet(search.setNumber);
     });
@@ -558,6 +648,10 @@ async function searchSet(setNumber) {
     // document.getElementById('instanceSelectionSection').style.display = 'none';
     document.getElementById('inventoryContainer').style.display = 'none';
     
+    // Hide instruction buttons and show loading state
+    document.getElementById('buildingInstructionsBtn').style.display = 'none';
+    document.getElementById('legoInstructionsBtn').style.display = 'none';
+    
     try {
         const response = await fetch('/search_set', {
             method: 'POST',
@@ -588,10 +682,11 @@ async function searchSet(setNumber) {
 }
 
 async function displaySetInfo(data) {
+    // First, show basic set info without external calls
     document.getElementById('setTitle').innerHTML = 
         `<i class="fas fa-cube"></i> ${data.set_name}`;
     
-    // Create set details HTML with image
+    // Create basic set details HTML (without image initially)
     let setDetailsHTML = `
         <div class="row">
             <div class="col-md-6">
@@ -614,43 +709,105 @@ async function displaySetInfo(data) {
         `;
     }
     
+    // Show basic set info immediately
+    document.getElementById('setDetails').innerHTML = setDetailsHTML;
+    document.getElementById('setInfo').style.display = 'block';
+    
+    // Load instances first (fast, local database calls)
+    instanceItems = await getInstances(data.set_number);
+    displayInstances(instanceItems, data.set_number);
+    if (instanceItems.length > 0) {
+        selectInstance(data.set_number, instanceItems[0].instance_name);
+    }
+    document.getElementById('instanceSelectionSection').style.display = 'block';
+    
+    // Load set image and building instructions in the background (slow, external calls)
+    loadSetImageAndInstructions(data);
+}
+
+async function loadSetImageAndInstructions(data) {
     // Add set image if available
     if (data.set_image) {
+        const bricklinkUrl = `https://img.bricklink.com/ItemImage/SN/0/${data.set_number}.png`;
         const imageHTML = data.set_url ? 
             `<a href="${data.set_url}" target="_blank" rel="noopener noreferrer" title="View set on official website">
-                <img src="${data.set_image}" alt="${data.set_name}" class="img-fluid rounded shadow-sm" style="max-height: 300px; max-width: 100%; cursor: pointer;">
+                <img src="${data.set_image}" 
+                     alt="${data.set_name}" 
+                     class="img-fluid rounded shadow-sm" 
+                     style="max-height: 300px; max-width: 100%; cursor: pointer;"
+                     onerror="this.src='${bricklinkUrl}'; this.onerror=function(){this.style.display='none'; this.nextElementSibling.style.display='block';};">
             </a>` :
-            `<img src="${data.set_image}" alt="${data.set_name}" class="img-fluid rounded shadow-sm" style="max-height: 300px; max-width: 100%;">`;
+            `<img src="${data.set_image}" 
+                 alt="${data.set_name}" 
+                 class="img-fluid rounded shadow-sm" 
+                 style="max-height: 300px; max-width: 100%;"
+                 onerror="this.src='${bricklinkUrl}'; this.onerror=function(){this.style.display='none'; this.nextElementSibling.style.display='block';};">`;
             
-        setDetailsHTML += `
+        const imageSection = `
             <div class="row mt-3">
                 <div class="col-12 text-center">
                     ${imageHTML}
                 </div>
             </div>
         `;
+        
+        // Append image to existing set details
+        document.getElementById('setDetails').innerHTML += imageSection;
+    } else {
+        // If no set image, try BrickLink directly
+        const bricklinkUrl = `https://img.bricklink.com/ItemImage/SN/0/${data.set_number}.png`;
+        const imageSection = `
+            <div class="row mt-3">
+                <div class="col-12 text-center">
+                    <img src="${bricklinkUrl}" 
+                         alt="${data.set_name}" 
+                         class="img-fluid rounded shadow-sm" 
+                         style="max-height: 300px; max-width: 100%;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                </div>
+            </div>
+        `;
+        
+        // Append image to existing set details
+        document.getElementById('setDetails').innerHTML += imageSection;
     }
     
-    document.getElementById('setDetails').innerHTML = setDetailsHTML;
-    document.getElementById('setInfo').style.display = 'block';
-    
-    // Check for instances
-    instanceItems = await getInstances(data.set_number);
-    
-    displayInstances(instanceItems, data.set_number);
-    if (instanceItems.length > 0) {
-        selectInstance(data.set_number, instanceItems[0].instance_name);
-    }
-    document.getElementById('instanceSelectionSection').style.display = 'block';
+    // Check if building instructions exist (slow external call)
+    await checkBuildingInstructionsAvailability(data.set_number);
 }
 
 function displayInventory(inventory) {
     const container = document.getElementById('inventoryList');
+    const colorFilterPanel = document.getElementById('colorFilterPanel');
     container.innerHTML = '';
     
     // Reset unsaved changes and hide save button initially
     hasUnsavedChanges = false;
     document.getElementById('saveInventoryBtn').style.display = 'none';
+    
+    // Reset color filter
+    selectedColors.clear();
+    
+    // Check if inventory is empty
+    if (!inventory || inventory.length === 0) {
+        // Show only the card header and a "no parts" message
+        colorFilterPanel.style.display = 'none';
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">This set contains no parts</h5>
+                <p class="text-muted">No inventory data is available for this set.</p>
+            </div>
+        `;
+        document.getElementById('inventoryContainer').style.display = 'block';
+        return;
+    }
+    
+    // Show color filter panel for sets with parts
+    colorFilterPanel.style.display = 'block';
+    
+    // Generate color filter buttons
+    generateColorFilterButtons(inventory);
     
     // Create a map of original inventory for quick lookup and store globally
     originalInventoryMap = {};
@@ -724,6 +881,310 @@ function displayInventory(inventory) {
     document.getElementById('inventoryContainer').style.display = 'block';
 }
 
+function getContrastColor(hexColor) {
+    // Remove # if present
+    hexColor = hexColor.replace('#', '');
+    
+    // Convert to RGB
+    const r = parseInt(hexColor.substr(0, 2), 16);
+    const g = parseInt(hexColor.substr(2, 2), 16);
+    const b = parseInt(hexColor.substr(4, 2), 16);
+    
+    // Calculate brightness using luminance formula
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    // Return black for light colors, white for dark colors
+    return brightness > 128 ? '#000000' : '#ffffff';
+}
+
+// Global variables for color filtering
+let selectedColors = new Set();
+let allInventoryParts = [];
+let currentSetNumber = null;
+
+async function checkBuildingInstructionsAvailability(setNumber) {
+    // Remove the -digit suffix from the set number
+    const cleanSetNumber = setNumber.replace(/-\d+$/, '');
+    
+    const legoBtn = document.getElementById('legoInstructionsBtn');
+    const brickBtn = document.getElementById('buildingInstructionsBtn');
+    
+    // Set initial state - buttons are hidden but ready to show
+    legoBtn.style.display = 'none';
+    legoBtn.classList.remove('show');
+    brickBtn.style.display = 'none';
+    brickBtn.classList.remove('show');
+    
+    // Check cache first
+    const cachedData = getCachedInstructionAvailability(cleanSetNumber);
+    if (cachedData) {
+        console.log('Using cached instruction availability for', cleanSetNumber);
+        
+        // Show buttons based on cached data
+        if (cachedData.lego) {
+            legoBtn.style.display = 'inline-block';
+            setTimeout(() => {
+                legoBtn.classList.add('show');
+            }, 10);
+        }
+        
+        if (cachedData.brick) {
+            brickBtn.style.display = 'inline-block';
+            setTimeout(() => {
+                brickBtn.classList.add('show');
+            }, 10);
+        }
+        
+        return; // Exit early if we have cached data
+    }
+    
+    console.log('No cache found, checking external sources for', cleanSetNumber);
+    
+    // Check LEGO instructions availability
+    let legoAvailable = false;
+    try {
+        const legoResponse = await fetch('/check_instructions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ set_number: cleanSetNumber })
+        });
+        const legoResult = await legoResponse.json();
+        legoAvailable = legoResult.has_instructions;
+        
+        if (legoAvailable) {
+            legoBtn.style.display = 'inline-block';
+            // Smooth fade in using CSS class
+            setTimeout(() => {
+                legoBtn.classList.add('show');
+            }, 10);
+        }
+    } catch (error) {
+        console.log('Could not verify LEGO instructions availability:', error);
+    }
+    
+    // Check BrickInstructions availability
+    let brickAvailable = false;
+    try {
+        // Check if instruction images are available from brickinstructions.com
+        const response = await fetch('/get_instruction_images', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ set_number: cleanSetNumber })
+        });
+        
+        const result = await response.json();
+        brickAvailable = result.success && result.count > 1;
+        
+        if (brickAvailable) {
+            brickBtn.style.display = 'inline-block';
+            // Smooth fade in using CSS class
+            setTimeout(() => {
+                brickBtn.classList.add('show');
+            }, 10);
+        }
+        
+    } catch (error) {
+        console.log('Could not verify building instructions availability:', error);
+    }
+    
+    // Cache the results
+    setCachedInstructionAvailability(cleanSetNumber, legoAvailable, brickAvailable);
+}
+
+async function openBuildingInstructions() {
+    if (!currentSetNumber) {
+        alert('No set selected');
+        return;
+    }
+    
+    // Remove the -digit suffix from the set number
+    const cleanSetNumber = currentSetNumber.replace(/-\d+$/, '');
+    
+    try {
+        // Show loading state
+        const button = document.getElementById('buildingInstructionsBtn');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        button.disabled = true;
+        
+        // Fetch instruction images
+        const response = await fetch('/get_instruction_images', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ set_number: cleanSetNumber })
+        });
+        
+        const result = await response.json();
+        
+        // Reset button state
+        button.innerHTML = originalText;
+        button.disabled = false;
+        
+        if (result.success) {
+            // Show instruction images in a modal
+            showInstructionModal(result.images, cleanSetNumber);
+        } else {
+            alert(`Could not load instructions: ${result.error}`);
+        }
+        
+    } catch (error) {
+        // Reset button state
+        const button = document.getElementById('buildingInstructionsBtn');
+        button.innerHTML = '<i class="fas fa-book"></i> BrickInstructions';
+        button.disabled = false;
+        
+        alert('Error loading instructions: ' + error.message);
+    }
+}
+
+function openLegoInstructions() {
+    if (!currentSetNumber) {
+        alert('No set selected');
+        return;
+    }
+    
+    const cleanSetNumber = currentSetNumber.replace(/-\d+$/, '');
+    const legoUrl = `https://www.lego.com/en-us/service/building-instructions/${cleanSetNumber}`;
+    
+    // Open in a new tab
+    window.open(legoUrl, '_blank');
+}
+
+function showInstructionModal(images, setNumber) {
+    const modal = new bootstrap.Modal(document.getElementById('instructionModal'));
+    const modalTitle = document.getElementById('instructionModalLabel');
+    const imagesContainer = document.getElementById('instructionImages');
+    
+    // Update modal title with clickable link
+    modalTitle.innerHTML = `<i class="fas fa-book"></i> <a href="https://lego.brickinstructions.com/lego_instructions/set/${setNumber}" target="_blank" class="text-decoration-none">BrickInstructions - Set ${setNumber}</a>`;
+    
+    // Clear previous images
+    imagesContainer.innerHTML = '';
+    
+    if (images.length === 0) {
+        imagesContainer.innerHTML = '<p class="text-muted">No instruction images found.</p>';
+    } else {
+        // Create image elements
+        images.forEach((imageUrl, index) => {
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.className = 'img-fluid border rounded shadow-sm';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.alt = `Instruction page ${index + 1}`;
+            img.loading = 'lazy';
+            
+            imagesContainer.appendChild(img);
+        });
+    }
+    
+    // Show the modal
+    modal.show();
+}
+
+function generateColorFilterButtons(inventory) {
+    const colorButtonsContainer = document.getElementById('colorFilterButtons');
+    colorButtonsContainer.innerHTML = '';
+    
+    // Get unique colors from inventory
+    const uniqueColors = new Map();
+    inventory.forEach(part => {
+        const colorKey = `${part.color_id}_${part.color_name}`;
+        if (!uniqueColors.has(colorKey)) {
+            uniqueColors.set(colorKey, {
+                color_id: part.color_id,
+                color_name: part.color_name,
+                color_rgb: part.color_rgb
+            });
+        }
+    });
+    
+    // Sort colors by name
+    const sortedColors = Array.from(uniqueColors.values()).sort((a, b) => a.color_name.localeCompare(b.color_name));
+    
+    // Create color filter buttons
+    sortedColors.forEach(color => {
+        const button = document.createElement('button');
+        button.className = 'btn btn-sm color-filter-btn';
+        button.style.cssText = `
+            background-color: #${color.color_rgb};
+            color: ${getContrastColor(color.color_rgb)};
+            border: 1px solid #ccc;
+            margin: 2px;
+        `;
+        button.textContent = color.color_name;
+        button.onclick = () => toggleColorFilter(color.color_id);
+        button.dataset.colorId = color.color_id;
+        colorButtonsContainer.appendChild(button);
+    });
+}
+
+function toggleColorFilter(colorId) {
+    if (selectedColors.has(colorId)) {
+        selectedColors.delete(colorId);
+    } else {
+        selectedColors.add(colorId);
+    }
+    
+    // Update button appearance
+    const buttons = document.querySelectorAll('.color-filter-btn');
+    buttons.forEach(button => {
+        const buttonColorId = parseInt(button.dataset.colorId);
+        if (selectedColors.has(buttonColorId)) {
+            button.style.border = '2px solid #007bff';
+            button.style.boxShadow = '0 0 5px rgba(0, 123, 255, 0.5)';
+        } else {
+            button.style.border = '1px solid #ccc';
+            button.style.boxShadow = 'none';
+        }
+    });
+    
+    // Apply filter
+    applyColorFilter();
+}
+
+function clearColorFilter() {
+    selectedColors.clear();
+    
+    // Reset button appearances
+    const buttons = document.querySelectorAll('.color-filter-btn');
+    buttons.forEach(button => {
+        button.style.border = '1px solid #ccc';
+        button.style.boxShadow = 'none';
+    });
+    
+    // Show all parts
+    applyColorFilter();
+}
+
+function applyColorFilter() {
+    const container = document.getElementById('inventoryList');
+    const partCards = container.querySelectorAll('.part-card');
+    
+    if (selectedColors.size === 0) {
+        // Show all parts
+        partCards.forEach(card => {
+            card.style.display = 'block';
+        });
+    } else {
+        // Filter parts by selected colors
+        partCards.forEach(card => {
+            const partKey = card.dataset.partKey;
+            const part = originalInventoryMap[partKey];
+            
+            if (part && selectedColors.has(part.color_id)) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+}
+
 function createPartCard(part, originalMap = {}) {
     // Generate part key that includes category information
     const partKey = `${part.part_number}_${part.color_id}_${part.is_spare ? 'spare' : 'regular'}_${part.is_minifig_part ? 'minifig' : 'normal'}`;
@@ -739,6 +1200,7 @@ function createPartCard(part, originalMap = {}) {
     
     const partCard = document.createElement('div');
     partCard.className = 'card part-card mb-3';
+    partCard.dataset.partKey = partKey;
     partCard.innerHTML = `
         <div class="card-body">
             <div class="row align-items-center">
@@ -753,10 +1215,9 @@ function createPartCard(part, originalMap = {}) {
                 <div class="col-md-2">
                     <strong>${part.part_number}</strong><br>
                     <small class="text-muted">${part.part_name}</small>
-                    ${part.minifig_sources ? `<br><small class="minifig-info"><i class="fas fa-user"></i> From minifigs</small>` : ''}
                 </div>
                 <div class="col-md-2">
-                    <span class="badge bg-secondary">${part.color_name}</span>
+                    <span class="badge" style="background-color: #${part.color_rgb}; color: ${getContrastColor(part.color_rgb)}; border: 1px solid #ccc;">${part.color_name}</span>
                 </div>
                 <div class="col-md-2">
                     <small class="text-muted">Original:</small><br>
@@ -923,7 +1384,17 @@ function displayInstances(instances, setNumber) {
             instanceDiv.style.cursor = 'pointer';
             instanceDiv.innerHTML = `
                 <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
-                    <strong>${instance.instance_name} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span></strong>
+                    <strong>
+                        <span class="editable-instance-name" 
+                              data-inventory-id="${instance.id}" 
+                              data-current-name="${instance.instance_name}"
+                              style="cursor: pointer; border-bottom: 1px dashed #28a745;"
+                              title="Click to edit name"
+                              onclick="event.stopPropagation(); startEditingInstanceName(this)">
+                            ${instance.instance_name}
+                        </span>
+                        <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span>
+                    </strong>
                     <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
                 </div>
                 <div class="btn-group" role="group">
@@ -937,7 +1408,16 @@ function displayInstances(instances, setNumber) {
             instanceDiv.style.cursor = 'pointer';
             instanceDiv.innerHTML = `
                 <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
-                    <strong>${instance.instance_name}</strong>
+                    <strong>
+                        <span class="editable-instance-name" 
+                              data-inventory-id="${instance.id}" 
+                              data-current-name="${instance.instance_name}"
+                              style="cursor: pointer; border-bottom: 1px dashed #007bff;"
+                              title="Click to edit name"
+                              onclick="event.stopPropagation(); startEditingInstanceName(this)">
+                            ${instance.instance_name}
+                        </span>
+                    </strong>
                     <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
                 </div>
                 <div class="btn-group" role="group">
@@ -968,14 +1448,45 @@ function updateInstanceSelectionDisplay(setNumber, selectedInstanceName) {
             parentDiv.className = 'alert alert-success d-flex justify-content-between align-items-center mb-2 border border-success border-2';
             const strongElement = instanceDiv.querySelector('strong');
             if (strongElement && !strongElement.innerHTML.includes('Selected')) {
-                strongElement.innerHTML = `${instanceName} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span>`;
+                // Preserve the editable span structure
+                const editableSpan = strongElement.querySelector('.editable-instance-name');
+                if (editableSpan) {
+                    strongElement.innerHTML = `
+                        <span class="editable-instance-name" 
+                              data-inventory-id="${editableSpan.dataset.inventoryId}" 
+                              data-current-name="${editableSpan.dataset.currentName}"
+                              style="cursor: pointer; border-bottom: 1px dashed #28a745;"
+                              title="Click to edit name"
+                              onclick="event.stopPropagation(); startEditingInstanceName(this)">
+                            ${editableSpan.dataset.currentName}
+                        </span>
+                        <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span>
+                    `;
+                } else {
+                    strongElement.innerHTML = `${instanceName} <span class="badge bg-success ms-2"><i class="fas fa-check"></i> Selected</span>`;
+                }
             }
         } else {
             // Update to unselected styling
             parentDiv.className = 'alert alert-primary d-flex justify-content-between align-items-center mb-2';
             const strongElement = instanceDiv.querySelector('strong');
             if (strongElement && strongElement.innerHTML.includes('Selected')) {
-                strongElement.innerHTML = instanceName;
+                // Preserve the editable span structure
+                const editableSpan = strongElement.querySelector('.editable-instance-name');
+                if (editableSpan) {
+                    strongElement.innerHTML = `
+                        <span class="editable-instance-name" 
+                              data-inventory-id="${editableSpan.dataset.inventoryId}" 
+                              data-current-name="${editableSpan.dataset.currentName}"
+                              style="cursor: pointer; border-bottom: 1px dashed #007bff;"
+                              title="Click to edit name"
+                              onclick="event.stopPropagation(); startEditingInstanceName(this)">
+                            ${editableSpan.dataset.currentName}
+                        </span>
+                    `;
+                } else {
+                    strongElement.innerHTML = instanceName;
+                }
             }
         }
     });
@@ -1051,7 +1562,16 @@ function addInstanceToDisplay(instance, setNumber) {
     instanceDiv.style.cursor = 'pointer';
     instanceDiv.innerHTML = `
         <div onclick="instanceClicked('${setNumber}', '${instance.instance_name}')" style="flex: 1;">
-            <strong>${instance.instance_name}</strong>
+            <strong>
+                <span class="editable-instance-name" 
+                      data-inventory-id="${instance.id}" 
+                      data-current-name="${instance.instance_name}"
+                      style="cursor: pointer; border-bottom: 1px dashed #007bff;"
+                      title="Click to edit name"
+                      onclick="event.stopPropagation(); startEditingInstanceName(this)">
+                    ${instance.instance_name}
+                </span>
+            </strong>
             <small class="text-muted d-block">Added: ${new Date(instance.added_at).toLocaleDateString()}</small>
         </div>
         <div class="btn-group" role="group">
@@ -1074,6 +1594,215 @@ function addInstanceToDisplay(instance, setNumber) {
 function instanceClicked(setNumber, instanceName) {
     navigationInstance = true;
     selectInstance(setNumber, instanceName);
+}
+
+function startEditingInstanceName(element) {
+    const currentName = element.dataset.currentName;
+    const inventoryId = element.dataset.inventoryId;
+    
+    // Store original content
+    const originalContent = element.innerHTML;
+    
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'form-control form-control-sm';
+    input.style.display = 'inline-block';
+    input.style.width = '150px';
+    input.style.fontSize = '0.875rem';
+    input.style.fontWeight = 'bold';
+    
+    // Create save button
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-success btn-sm ms-1';
+    saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+    saveBtn.style.fontSize = '0.75rem';
+    saveBtn.style.padding = '0.25rem 0.5rem';
+    
+    // Create cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary btn-sm ms-1';
+    cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+    cancelBtn.style.fontSize = '0.75rem';
+    cancelBtn.style.padding = '0.25rem 0.5rem';
+    
+    // Replace content with input and buttons
+    element.innerHTML = '';
+    element.appendChild(input);
+    element.appendChild(saveBtn);
+    element.appendChild(cancelBtn);
+    
+    // Focus the input
+    input.focus();
+    input.select();
+    
+    // Save function
+    const save = async () => {
+        const newName = input.value.trim();
+        
+        if (newName === currentName) {
+            // No change, just cancel
+            cancel();
+            return;
+        }
+        
+        if (newName.length === 0) {
+            showAlert('Name cannot be empty', 'warning');
+            input.focus();
+            return;
+        }
+        
+        // Check if name is already taken by another instance
+        const existingNames = Array.from(document.querySelectorAll('.editable-instance-name'))
+            .map(el => el.dataset.currentName)
+            .filter(name => name !== currentName);
+        
+        if (existingNames.includes(newName)) {
+            showAlert('An instance with this name already exists', 'warning');
+            input.focus();
+            return;
+        }
+        
+        try {
+            const response = await fetch('/update_inventory_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_inventory_id: inventoryId,
+                    new_name: newName
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Update the element with new name
+                element.innerHTML = newName;
+                element.dataset.currentName = newName;
+                showAlert('Name updated successfully!', 'success');
+                
+                // Update the instance name in the global instanceItems array
+                const instance = instanceItems.find(inst => inst.id == inventoryId);
+                if (instance) {
+                    instance.instance_name = newName;
+                }
+                
+                // Update currentlySelectedInstance if this was the selected one
+                if (currentlySelectedInstance === currentName) {
+                    currentlySelectedInstance = newName;
+                }
+                
+                // Refresh the instances display to update all references
+                displayInstances(instanceItems, currentSetNumber);
+            } else {
+                showAlert(data.error || 'Failed to update name', 'danger');
+                cancel();
+            }
+        } catch (error) {
+            console.error('Error updating name:', error);
+            showAlert('An error occurred while updating the name', 'danger');
+            cancel();
+        }
+    };
+    
+    // Cancel function
+    const cancel = () => {
+        element.innerHTML = originalContent;
+    };
+    
+    // Event listeners
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        save();
+    });
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancel();
+    });
+    
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+        }
+    });
+    
+    // Click outside to cancel
+    const clickOutside = (e) => {
+        if (!element.contains(e.target)) {
+            cancel();
+            document.removeEventListener('click', clickOutside);
+        }
+    };
+    
+    // Add event listener after a short delay to prevent immediate cancellation
+    setTimeout(() => {
+        document.addEventListener('click', clickOutside);
+    }, 100);
+}
+
+function showAlert(message, type) {
+    // Get or create toast container
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    // Set icon based on type
+    let icon = 'fas fa-check-circle';
+    switch(type) {
+        case 'success':
+            icon = 'fas fa-check-circle';
+            break;
+        case 'danger':
+            icon = 'fas fa-exclamation-circle';
+            break;
+        case 'warning':
+            icon = 'fas fa-exclamation-triangle';
+            break;
+        case 'info':
+            icon = 'fas fa-info-circle';
+            break;
+    }
+    
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="toast-icon ${icon}"></i>
+            <span class="toast-message">${message}</span>
+            <button class="toast-close" onclick="this.parentElement.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="toast-progress" style="animation-duration: 3s;"></div>
+    `;
+    
+    // Add to container
+    toastContainer.appendChild(toast);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.style.animation = 'slideDownOut 0.3s ease-out';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }
+    }, 3000);
 }
 
 async function selectInstance(setNumber, instanceName) {
@@ -1278,6 +2007,12 @@ async function saveInventory() {
         return;
     }
     
+    console.log('Saving inventory with data:', {
+        set_number: currentSetNumber,
+        instance_name: currentInstanceName,
+        modifications: modifiedInventory
+    });
+    
     try {
         const response = await fetch('/update_inventory', {
             method: 'POST',
@@ -1306,5 +2041,8 @@ async function saveInventory() {
         showAlert('An error occurred while saving inventory', 'danger');
     }
 }
+
+// Initialize instruction cache when page loads
+loadInstructionCache();
 </script>
 {% endblock %}
