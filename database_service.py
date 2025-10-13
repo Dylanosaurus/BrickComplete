@@ -60,7 +60,7 @@ class LegoDatabaseService:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get set parts
+            # Get set parts - use the inventory with the highest version
             set_parts_query = """
                 SELECT 
                     ip.part_num,
@@ -78,10 +78,15 @@ class LegoDatabaseService:
                 JOIN parts p ON ip.part_num = p.part_num
                 JOIN colors c ON ip.color_id = c.id
                 LEFT JOIN part_categories pc ON p.part_cat_id = pc.id
-                WHERE inv.set_num = ?
+                WHERE inv.set_num = ? 
+                AND inv.version = (
+                    SELECT MAX(version) 
+                    FROM inventories 
+                    WHERE set_num = ?
+                )
             """
             
-            # Get minifig parts from minifigs included in this set
+            # Get minifig parts from minifigs included in this set - use the inventory with the highest version
             minifig_parts_query = """
                 SELECT 
                     ip.part_num,
@@ -104,14 +109,19 @@ class LegoDatabaseService:
                 JOIN colors c ON ip.color_id = c.id
                 LEFT JOIN part_categories pc ON p.part_cat_id = pc.id
                 LEFT JOIN minifigs m ON im.fig_num = m.fig_num
-                WHERE inv.set_num = ?
+                WHERE inv.set_num = ? 
+                AND inv.version = (
+                    SELECT MAX(version) 
+                    FROM inventories 
+                    WHERE set_num = ?
+                )
             """
             
-            # Execute both queries
-            cursor.execute(set_parts_query, (set_number,))
+            # Execute both queries - pass set_number twice for the subquery
+            cursor.execute(set_parts_query, (set_number, set_number))
             set_parts = cursor.fetchall()
             
-            cursor.execute(minifig_parts_query, (set_number,))
+            cursor.execute(minifig_parts_query, (set_number, set_number))
             minifig_parts = cursor.fetchall()
             
             # Combine and process all parts

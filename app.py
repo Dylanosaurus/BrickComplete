@@ -800,16 +800,18 @@ def get_instruction_images():
 @app.route('/update_inventory_name', methods=['POST'])
 @login_required_json
 def update_inventory_name():
-    """Update the name of a user inventory"""
+    """Update the name and/or description of a user inventory"""
     data = request.json
     user_inventory_id = data.get('user_inventory_id')
     new_name = data.get('new_name')
+    new_description = data.get('new_description')
     
-    if not user_inventory_id or not new_name:
-        return jsonify({'error': 'Missing required fields'}), 400
+    if not user_inventory_id:
+        return jsonify({'error': 'Missing user_inventory_id'}), 400
     
-    if len(new_name.strip()) == 0:
-        return jsonify({'error': 'Name cannot be empty'}), 400
+    # At least one field must be provided
+    if new_name is None and new_description is None:
+        return jsonify({'error': 'At least one field (name or description) must be provided'}), 400
     
     try:
         # Find the inventory
@@ -821,29 +823,39 @@ def update_inventory_name():
         if not inventory:
             return jsonify({'error': 'Inventory not found'}), 404
         
-        # Check if another inventory with the same set number and name already exists
-        existing_inventory = UserInventory.query.filter_by(
-            set_number=inventory.set_number,
-            inventory_name=new_name.strip(),
-            user_id=current_user.user_id
-        ).filter(UserInventory.user_inventory_id != user_inventory_id).first()
+        # Update name if provided
+        if new_name is not None:
+            if len(new_name.strip()) == 0:
+                return jsonify({'error': 'Name cannot be empty'}), 400
+            
+            # Check if another inventory with the same set number and name already exists
+            existing_inventory = UserInventory.query.filter_by(
+                set_number=inventory.set_number,
+                inventory_name=new_name.strip(),
+                user_id=current_user.user_id
+            ).filter(UserInventory.user_inventory_id != user_inventory_id).first()
+            
+            if existing_inventory:
+                return jsonify({'error': 'An instance with this name already exists for this set'}), 400
+            
+            inventory.inventory_name = new_name.strip()
         
-        if existing_inventory:
-            return jsonify({'error': 'An instance with this name already exists for this set'}), 400
+        # Update description if provided
+        if new_description is not None:
+            inventory.description = new_description.strip()
         
-        # Update the name
-        inventory.inventory_name = new_name.strip()
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': 'Inventory name updated successfully',
-            'new_name': inventory.inventory_name
+            'message': 'Inventory updated successfully',
+            'new_name': inventory.inventory_name,
+            'new_description': inventory.description
         })
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to update inventory name: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to update inventory: {str(e)}'}), 500
 
 if __name__ == '__main__':
     with app.app_context():

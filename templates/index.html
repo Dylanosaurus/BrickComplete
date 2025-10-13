@@ -3,6 +3,218 @@
 {% block title %}BrickComplete - LEGO Set Inventory Manager{% endblock %}
 
 {% block content %}
+<style>
+.instance-description-container {
+    margin-top: 10px;
+}
+
+.instance-description {
+    padding: 8px 12px;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.instance-description:hover {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.instance-description-input {
+    border: 2px solid #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.instance-description.has-content {
+    background-color: #fff;
+    border-color: #28a745;
+}
+
+.instance-description.has-content:hover {
+    background-color: #f8f9fa;
+}
+
+.auto-save-indicator {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #28a745;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 1050;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.3s ease;
+    display: none;
+    opacity: 0;
+}
+
+.auto-save-indicator i {
+    margin-right: 5px;
+}
+
+/* Grid layout for parts */
+.parts-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.parts-grid.cols-1 {
+    grid-template-columns: repeat(1, 1fr);
+}
+
+.parts-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.parts-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.parts-grid.cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.parts-grid.cols-5 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.parts-grid.cols-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.parts-grid.cols-7 {
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.parts-grid.cols-8 {
+    grid-template-columns: repeat(8, 1fr);
+}
+
+.parts-grid.cols-9 {
+    grid-template-columns: repeat(9, 1fr);
+}
+
+.parts-grid.cols-10 {
+    grid-template-columns: repeat(10, 1fr);
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+    .parts-grid.cols-4,
+    .parts-grid.cols-5,
+    .parts-grid.cols-6,
+    .parts-grid.cols-7,
+    .parts-grid.cols-8,
+    .parts-grid.cols-9,
+    .parts-grid.cols-10 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .parts-grid.cols-3,
+    .parts-grid.cols-4,
+    .parts-grid.cols-5,
+    .parts-grid.cols-6,
+    .parts-grid.cols-7,
+    .parts-grid.cols-8,
+    .parts-grid.cols-9,
+    .parts-grid.cols-10 {
+        grid-template-columns: repeat(1, 1fr);
+    }
+}
+
+/* Part image styling */
+.part-image {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.part-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80px;
+}
+
+/* Center quantity controls */
+.quantity-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Instance status styling */
+.instance-status {
+    flex-shrink: 0;
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-complete {
+    background-color: #d1edff;
+    color: #0c5460;
+    border: 1px solid #b8daff;
+}
+
+.status-missing {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-extra {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+
+.instance-status-detailed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.status-value {
+    font-weight: 600;
+}
+</style>
 <div class="row">
     <div class="col-12">
         <div class="jumbotron bg-light p-5 rounded mb-4">
@@ -62,7 +274,7 @@
             </div>
         </div>
         <div class="card" id="setInfo" style="display: none;">
-            <div class="card-header d-flex justify-content-between align-items-center" style="height: 120px;">
+            <div class="card-header d-flex justify-content-between align-items-center" style="height: 80px;">
                   <h5 id="setTitle"><i class="fas fa-cube"></i> Set Information</h5>
                   <div class="d-flex flex-column align-items-end gap-2">
                       <button id="legoInstructionsBtn" class="btn btn-outline-primary" onclick="openLegoInstructions()" style="display: none;">
@@ -115,22 +327,105 @@
 
 <div id="inventoryContainer" class="row mt-4" style="display: none;">
     <div class="col-12">
+        <!-- Instance Info Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Instance Info</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Description:</label>
+                            <div id="instanceDescription" class="instance-description" onclick="editDescription()" title="Click to edit description">
+                                <i class="fas fa-edit text-muted me-2"></i>
+                                <span id="descriptionText">Click to add a description for this set instance...</span>
+                            </div>
+                            <input type="text" id="descriptionInput" class="form-control instance-description-input" 
+                                   placeholder="Enter description for this set instance..." 
+                                   style="display: none;" 
+                                   onblur="saveDescription()" 
+                                   onkeypress="handleDescriptionKeyPress(event)">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Status:</label>
+                            <div id="instanceStatusDetailed" class="instance-status-detailed">
+                                <!-- Detailed status will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Set Inventory Card -->
         <div class="card">
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5><i class="fas fa-list"></i> Set Inventory</h5>
-                    <button id="saveInventoryBtn" class="btn btn-success" onclick="saveInventory()" style="display: none;">
-                        <i class="fas fa-save"></i> Save Changes
-                    </button>
                 </div>
             </div>
             <div id="colorFilterPanel" class="card-body" style="border-bottom: 1px solid #dee2e6;">
+                <!-- Color Filter Row -->
+                <div class="row mb-3">
+                    <div class="col-12">
                 <h6 class="mb-3"><i class="fas fa-palette"></i> Filter by Color</h6>
                 <div id="colorFilterButtons" class="d-flex flex-wrap gap-2">
                     <!-- Color filter buttons will be dynamically generated here -->
                 </div>
-                <div class="mt-3">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="clearColorFilter()">
+                    </div>
+                </div>
+                
+                <!-- Modification and Category Filter Row -->
+                <div class="d-flex align-items-center gap-4">
+                    <div class="d-flex flex-column">
+                        <h6 class="mb-2"><i class="fas fa-filter"></i> Filter by Modification</h6>
+                        <div class="btn-group" role="group" aria-label="Modification filter">
+                            <button type="button" class="btn btn-sm btn-outline-primary modification-filter-btn active" 
+                                    data-filter="all" onclick="setModificationFilter('all')">
+                                <i class="fas fa-list"></i> All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger modification-filter-btn" 
+                                    data-filter="missing" onclick="setModificationFilter('missing')">
+                                <i class="fas fa-minus-circle"></i> Missing
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success modification-filter-btn" 
+                                    data-filter="extra" onclick="setModificationFilter('extra')">
+                                <i class="fas fa-plus-circle"></i> Extra
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Vertical Separator -->
+                    <div class="vr"></div>
+                    
+                    <div class="d-flex flex-column">
+                        <h6 class="mb-2"><i class="fas fa-tags"></i> Filter by Category</h6>
+                        <div class="btn-group" role="group" aria-label="Category filter">
+                            <button type="button" class="btn btn-sm btn-outline-primary category-filter-btn active" 
+                                    data-filter="all" onclick="setCategoryFilter('all')">
+                                <i class="fas fa-list"></i> All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info category-filter-btn" 
+                                    data-filter="regular" onclick="setCategoryFilter('regular')">
+                                <i class="fas fa-cube"></i> Regular
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning category-filter-btn" 
+                                    data-filter="minifig" onclick="setCategoryFilter('minifig')">
+                                <i class="fas fa-user"></i> Minifig
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary category-filter-btn" 
+                                    data-filter="spare" onclick="setCategoryFilter('spare')">
+                                <i class="fas fa-gift"></i> Spare
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3 d-flex justify-content-start align-items-center">
+                    <button id="clearAllFiltersBtn" class="btn btn-sm btn-outline-secondary" onclick="clearAllFilters()" style="display: none;">
                         <i class="fas fa-times"></i> Clear All Filters
                     </button>
                 </div>
@@ -177,7 +472,7 @@
 <script>
 let modifiedInventory = {};
 let currentInstanceName = 'Default';
-let hasUnsavedChanges = false;
+// hasUnsavedChanges removed - auto-save is now implemented
 let currentlySelectedInstance = null;
 let originalInventoryMap = {};
 
@@ -643,6 +938,9 @@ async function searchSet(setNumber) {
     currentSetNumber = setNumber;
     currentlySelectedInstance = null; // Reset selected instance for new search
     
+    // Reset filters for new search
+    resetAllFiltersForNewSearch();
+    
     // Hide previous results and show loading
     document.getElementById('howItWorks').style.display = 'none';
     // document.getElementById('instanceSelectionSection').style.display = 'none';
@@ -781,12 +1079,12 @@ function displayInventory(inventory) {
     const colorFilterPanel = document.getElementById('colorFilterPanel');
     container.innerHTML = '';
     
-    // Reset unsaved changes and hide save button initially
-    hasUnsavedChanges = false;
-    document.getElementById('saveInventoryBtn').style.display = 'none';
+    // Auto-save is now enabled, no need to track unsaved changes
     
-    // Reset color filter
-    selectedColors.clear();
+    // Don't reset filters when switching instances - preserve user's filter selections
+    // selectedColors.clear();
+    // currentModificationFilter = 'all';
+    // currentCategoryFilter = 'all';
     
     // Check if inventory is empty
     if (!inventory || inventory.length === 0) {
@@ -817,10 +1115,225 @@ function displayInventory(inventory) {
         originalInventoryMap[key] = part;
     });
     
-    // Separate parts by type and spare status using the new is_minifig_part field
-    const regularParts = inventory.filter(part => !part.is_spare && !part.is_minifig_part);
-    const minifigParts = inventory.filter(part => !part.is_spare && part.is_minifig_part);
-    const spareParts = inventory.filter(part => part.is_spare);
+    // Store all parts globally for filtering
+    allInventoryParts = inventory;
+    
+    // Reset filter buttons
+    resetModificationFilterButtons();
+    resetCategoryFilterButtons();
+    
+    // Hide instance info if no instance is selected
+    const instanceInfoCard = document.querySelector('#inventoryContainer .card:first-child');
+    if (!currentlySelectedInstance) {
+        if (instanceInfoCard) instanceInfoCard.style.display = 'none';
+    } else {
+        if (instanceInfoCard) instanceInfoCard.style.display = 'block';
+    }
+    
+    // Update clear filters button visibility
+    updateClearFiltersButtonVisibility();
+    
+    // Display filtered parts
+    displayFilteredParts();
+    
+    document.getElementById('inventoryContainer').style.display = 'block';
+}
+
+function resetModificationFilterButtons() {
+    // Update button appearance based on current filter state (don't change the filter itself)
+    const buttons = document.querySelectorAll('.modification-filter-btn');
+    buttons.forEach(button => {
+        button.classList.remove('active');
+        button.classList.add('btn-outline-primary', 'btn-outline-danger', 'btn-outline-success');
+        button.classList.remove('btn-primary', 'btn-danger', 'btn-success');
+        
+        // Set the active button based on current filter state
+        if (button.dataset.filter === currentModificationFilter) {
+            button.classList.add('active');
+            if (currentModificationFilter === 'all') {
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-primary');
+            } else if (currentModificationFilter === 'missing') {
+                button.classList.remove('btn-outline-danger');
+                button.classList.add('btn-danger');
+            } else if (currentModificationFilter === 'extra') {
+                button.classList.remove('btn-outline-success');
+                button.classList.add('btn-success');
+            }
+        }
+    });
+}
+
+function setModificationFilter(filter) {
+    // If clicking the currently active filter (and it's not 'all'), revert to 'all'
+    if (currentModificationFilter === filter && filter !== 'all') {
+        filter = 'all';
+    }
+    
+    currentModificationFilter = filter;
+    
+    // Update button states
+    const buttons = document.querySelectorAll('.modification-filter-btn');
+    buttons.forEach(button => {
+        button.classList.remove('active');
+        const filterType = button.dataset.filter;
+        
+        // Reset all button styles
+        button.classList.remove('btn-primary', 'btn-danger', 'btn-success');
+        button.classList.add('btn-outline-primary', 'btn-outline-danger', 'btn-outline-success');
+        
+        // Set active button style
+        if (button.dataset.filter === filter) {
+            button.classList.add('active');
+            if (filter === 'all') {
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-primary');
+            } else if (filter === 'missing') {
+                button.classList.remove('btn-outline-danger');
+                button.classList.add('btn-danger');
+            } else if (filter === 'extra') {
+                button.classList.remove('btn-outline-success');
+                button.classList.add('btn-success');
+            }
+        }
+    });
+    
+    // Update clear filters button visibility
+    updateClearFiltersButtonVisibility();
+    
+    // Apply filters
+    displayFilteredParts();
+}
+
+function resetCategoryFilterButtons() {
+    // Update button appearance based on current filter state (don't change the filter itself)
+    const buttons = document.querySelectorAll('.category-filter-btn');
+    buttons.forEach(button => {
+        button.classList.remove('active');
+        button.classList.add('btn-outline-primary', 'btn-outline-info', 'btn-outline-warning', 'btn-outline-secondary');
+        button.classList.remove('btn-primary', 'btn-info', 'btn-warning', 'btn-secondary');
+        
+        // Set the active button based on current filter state
+        if (button.dataset.filter === currentCategoryFilter) {
+            button.classList.add('active');
+            if (currentCategoryFilter === 'all') {
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-primary');
+            } else if (currentCategoryFilter === 'regular') {
+                button.classList.remove('btn-outline-info');
+                button.classList.add('btn-info');
+            } else if (currentCategoryFilter === 'minifig') {
+                button.classList.remove('btn-outline-warning');
+                button.classList.add('btn-warning');
+            } else if (currentCategoryFilter === 'spare') {
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-secondary');
+            }
+        }
+    });
+}
+
+function setCategoryFilter(filter) {
+    // If clicking the currently active filter (and it's not 'all'), revert to 'all'
+    if (currentCategoryFilter === filter && filter !== 'all') {
+        filter = 'all';
+    }
+    
+    currentCategoryFilter = filter;
+    
+    // Update button states
+    const buttons = document.querySelectorAll('.category-filter-btn');
+    buttons.forEach(button => {
+        button.classList.remove('active');
+        
+        // Reset all button styles
+        button.classList.remove('btn-primary', 'btn-info', 'btn-warning', 'btn-secondary');
+        button.classList.add('btn-outline-primary', 'btn-outline-info', 'btn-outline-warning', 'btn-outline-secondary');
+        
+        // Set active button style
+        if (button.dataset.filter === filter) {
+            button.classList.add('active');
+            if (filter === 'all') {
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-primary');
+            } else if (filter === 'regular') {
+                button.classList.remove('btn-outline-info');
+                button.classList.add('btn-info');
+            } else if (filter === 'minifig') {
+                button.classList.remove('btn-outline-warning');
+                button.classList.add('btn-warning');
+            } else if (filter === 'spare') {
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-secondary');
+            }
+        }
+    });
+    
+    // Update clear filters button visibility
+    updateClearFiltersButtonVisibility();
+    
+    // Apply filters
+    displayFilteredParts();
+}
+
+function displayFilteredParts() {
+    const container = document.getElementById('inventoryList');
+    container.innerHTML = '';
+    
+    if (!allInventoryParts || allInventoryParts.length === 0) {
+        return;
+    }
+    
+    // Filter parts based on modification status
+    let filteredParts = allInventoryParts;
+    
+    if (currentModificationFilter !== 'all') {
+        filteredParts = allInventoryParts.filter(part => {
+            const partKey = `${part.part_number}_${part.color_id}_${part.is_spare ? 'spare' : 'regular'}_${part.is_minifig_part ? 'minifig' : 'normal'}`;
+            const modifiedQty = modifiedInventory[partKey] || 0;
+            const originalQty = originalInventoryMap[partKey] ? originalInventoryMap[partKey].quantity : part.quantity;
+            const totalQty = originalQty + modifiedQty;
+            const modificationFromOriginal = totalQty - originalQty;
+            
+            if (currentModificationFilter === 'missing') {
+                return modificationFromOriginal < 0;
+            } else if (currentModificationFilter === 'extra') {
+                return modificationFromOriginal > 0;
+            }
+            return true;
+        });
+    }
+    
+    // Further filter by color if color filter is active
+    if (selectedColors.size > 0) {
+        filteredParts = filteredParts.filter(part => selectedColors.has(part.color_id));
+    }
+    
+    // Further filter by category if category filter is active
+    if (currentCategoryFilter !== 'all') {
+        filteredParts = filteredParts.filter(part => {
+            if (currentCategoryFilter === 'regular') {
+                return !part.is_spare && !part.is_minifig_part;
+            } else if (currentCategoryFilter === 'minifig') {
+                return !part.is_spare && part.is_minifig_part;
+            } else if (currentCategoryFilter === 'spare') {
+                return part.is_spare;
+            }
+            return true;
+        });
+    }
+    
+    // Check if no parts match the current filters
+    if (filteredParts.length === 0) {
+        const noResultsMessage = createNoResultsMessage();
+        container.appendChild(noResultsMessage);
+        return;
+    }
+    
+    // Separate parts by type and spare status
+    const regularParts = filteredParts.filter(part => !part.is_spare && !part.is_minifig_part);
+    const minifigParts = filteredParts.filter(part => !part.is_spare && part.is_minifig_part);
+    const spareParts = filteredParts.filter(part => part.is_spare);
     
     // Sort regular parts to put "No Color/Any Color" (color ID 9999) at the top
     regularParts.sort((a, b) => {
@@ -830,9 +1343,11 @@ function displayInventory(inventory) {
         if (aIsNoColor && !bIsNoColor) return -1;
         if (!aIsNoColor && bIsNoColor) return 1;
         
-        // If both are no color or both are regular colors, maintain existing sort order
         return 0;
     });
+    
+    // Determine if we should show section dividers (only when not filtering by specific category)
+    const showDividers = currentCategoryFilter === 'all';
     
     // Display regular parts
     if (regularParts.length > 0) {
@@ -842,43 +1357,259 @@ function displayInventory(inventory) {
         `;
         container.appendChild(regularSection);
         
+        const regularGrid = document.createElement('div');
+        regularGrid.className = `parts-grid cols-${currentColumnCount}`;
+        container.appendChild(regularGrid);
+        
         regularParts.forEach(part => {
             const partCard = createPartCard(part, originalInventoryMap);
-            container.appendChild(partCard);
+            regularGrid.appendChild(partCard);
         });
     }
     
     // Display minifig parts
     if (minifigParts.length > 0) {
         const minifigSection = document.createElement('div');
+        const dividerHtml = showDividers ? '<hr class="my-4">' : '';
         minifigSection.innerHTML = `
-            <hr class="my-4">
+            ${dividerHtml}
             <h6 class="mb-3"><i class="fas fa-user"></i> Minifig Parts (${minifigParts.length})</h6>
         `;
         container.appendChild(minifigSection);
         
+        const minifigGrid = document.createElement('div');
+        minifigGrid.className = `parts-grid cols-${currentColumnCount}`;
+        container.appendChild(minifigGrid);
+        
         minifigParts.forEach(part => {
             const partCard = createPartCard(part, originalInventoryMap);
-            container.appendChild(partCard);
+            minifigGrid.appendChild(partCard);
         });
     }
     
     // Display spare parts
     if (spareParts.length > 0) {
         const spareSection = document.createElement('div');
+        const dividerHtml = showDividers ? '<hr class="my-4">' : '';
         spareSection.innerHTML = `
-            <hr class="my-4">
+            ${dividerHtml}
             <h6 class="mb-3"><i class="fas fa-gift"></i> Spare Parts (${spareParts.length})</h6>
         `;
         container.appendChild(spareSection);
         
+        const spareGrid = document.createElement('div');
+        spareGrid.className = `parts-grid cols-${currentColumnCount}`;
+        container.appendChild(spareGrid);
+        
         spareParts.forEach(part => {
             const partCard = createPartCard(part, originalInventoryMap);
-            container.appendChild(partCard);
+            spareGrid.appendChild(partCard);
         });
     }
     
-    document.getElementById('inventoryContainer').style.display = 'block';
+    // Update instance status after displaying parts
+    updateInstanceStatus();
+}
+
+function createNoResultsMessage() {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'text-center py-5';
+    
+    // Determine the appropriate message based on active filters
+    let iconClass = 'fas fa-filter';
+    let title = 'No Parts Found';
+    let message = 'No parts match your current filter criteria.';
+    let suggestion = '';
+    
+    if (currentModificationFilter === 'missing') {
+        iconClass = 'fas fa-minus-circle';
+        title = 'No Missing Parts';
+        message = 'You don\'t have any parts with reduced quantities.';
+        suggestion = 'Try modifying some part quantities to see missing parts.';
+    } else if (currentModificationFilter === 'extra') {
+        iconClass = 'fas fa-plus-circle';
+        title = 'No Extra Parts';
+        message = 'You don\'t have any parts with increased quantities.';
+        suggestion = 'Try adding extra parts to see them here.';
+    } else if (selectedColors.size > 0) {
+        iconClass = 'fas fa-palette';
+        title = 'No Parts in Selected Colors';
+        message = 'No parts match the selected color filters.';
+        suggestion = 'Try selecting different colors or clear the color filter.';
+    } else if (currentCategoryFilter === 'regular') {
+        iconClass = 'fas fa-cube';
+        title = 'No Regular Parts';
+        message = 'This set contains no regular parts.';
+        suggestion = 'Try selecting a different category or clear the category filter.';
+    } else if (currentCategoryFilter === 'minifig') {
+        iconClass = 'fas fa-user';
+        title = 'No Minifigure Parts';
+        message = 'This set contains no minifigure parts.';
+        suggestion = 'Try selecting a different category or clear the category filter.';
+    } else if (currentCategoryFilter === 'spare') {
+        iconClass = 'fas fa-gift';
+        title = 'No Spare Parts';
+        message = 'This set contains no spare parts.';
+        suggestion = 'Try selecting a different category or clear the category filter.';
+    }
+    
+    messageDiv.innerHTML = `
+        <i class="${iconClass} fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">${title}</h5>
+        <p class="text-muted">${message}</p>
+        ${suggestion ? `<p class="text-muted small">${suggestion}</p>` : ''}
+        <button class="btn btn-outline-secondary btn-sm mt-2" onclick="clearAllFilters()">
+            <i class="fas fa-times"></i> Clear All Filters
+        </button>
+    `;
+    
+    return messageDiv;
+}
+
+// Description editing functions
+function editDescription() {
+    const descriptionDiv = document.getElementById('instanceDescription');
+    const descriptionInput = document.getElementById('descriptionInput');
+    const descriptionText = document.getElementById('descriptionText');
+    
+    // Hide the display div and show the input
+    descriptionDiv.style.display = 'none';
+    descriptionInput.style.display = 'block';
+    
+    // Set the current text as the input value
+    const currentText = descriptionText.textContent;
+    if (currentText === 'Click to add a description for this set instance...') {
+        descriptionInput.value = '';
+    } else {
+        descriptionInput.value = currentText;
+    }
+    
+    // Focus and select the input
+    descriptionInput.focus();
+    descriptionInput.select();
+}
+
+function saveDescription() {
+    const descriptionDiv = document.getElementById('instanceDescription');
+    const descriptionInput = document.getElementById('descriptionInput');
+    const descriptionText = document.getElementById('descriptionText');
+    
+    const newDescription = descriptionInput.value.trim();
+    
+    // Hide the input and show the display div
+    descriptionInput.style.display = 'none';
+    descriptionDiv.style.display = 'flex';
+    
+    // Update the display text
+    if (newDescription === '') {
+        descriptionText.textContent = 'Click to add a description for this set instance...';
+        descriptionDiv.classList.remove('has-content');
+    } else {
+        descriptionText.textContent = newDescription;
+        descriptionDiv.classList.add('has-content');
+    }
+    
+    // Save to database if we have a current instance
+    if (currentSetNumber && currentlySelectedInstance) {
+        updateInstanceDescription(newDescription);
+    }
+}
+
+function handleDescriptionKeyPress(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        saveDescription();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        // Cancel editing without saving
+        const descriptionDiv = document.getElementById('instanceDescription');
+        const descriptionInput = document.getElementById('descriptionInput');
+        
+        descriptionInput.style.display = 'none';
+        descriptionDiv.style.display = 'flex';
+    }
+}
+
+async function updateInstanceDescription(description) {
+    if (!currentSetNumber || !currentlySelectedInstance) {
+        return;
+    }
+    
+    const inventoryId = getCurrentUserInventoryId();
+    if (!inventoryId) {
+        console.error('No user inventory ID available');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/update_inventory_name', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_inventory_id: inventoryId,
+                new_description: description
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Failed to update description:', errorData.error);
+            showAlert('Failed to save description: ' + errorData.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error updating description:', error);
+        showAlert('Network error while saving description', 'danger');
+    }
+}
+
+function getCurrentUserInventoryId() {
+    // This function should return the current user inventory ID
+    // We'll need to track this when an instance is selected
+    return currentUserInventoryId || null;
+}
+
+function setCurrentUserInventoryId(inventoryId) {
+    currentUserInventoryId = inventoryId;
+}
+
+async function loadInstanceDescription(setNumber, instanceName) {
+    try {
+        const response = await fetch(`/get_user_inventories/${setNumber}`);
+        if (response.ok) {
+            const inventories = await response.json();
+            const currentInventory = inventories.find(inv => inv.inventory_name === instanceName);
+            
+            if (currentInventory) {
+                setCurrentUserInventoryId(currentInventory.user_inventory_id);
+                updateDescriptionDisplay(currentInventory.description || '');
+            } else {
+                setCurrentUserInventoryId(null);
+                updateDescriptionDisplay('');
+            }
+        } else {
+            setCurrentUserInventoryId(null);
+            updateDescriptionDisplay('');
+        }
+    } catch (error) {
+        console.error('Error loading instance description:', error);
+        setCurrentUserInventoryId(null);
+        updateDescriptionDisplay('');
+    }
+}
+
+function updateDescriptionDisplay(description) {
+    const descriptionDiv = document.getElementById('instanceDescription');
+    const descriptionText = document.getElementById('descriptionText');
+    
+    if (description && description.trim() !== '') {
+        descriptionText.textContent = description;
+        descriptionDiv.classList.add('has-content');
+    } else {
+        descriptionText.textContent = 'Click to add a description for this set instance...';
+        descriptionDiv.classList.remove('has-content');
+    }
 }
 
 function getContrastColor(hexColor) {
@@ -901,6 +1632,18 @@ function getContrastColor(hexColor) {
 let selectedColors = new Set();
 let allInventoryParts = [];
 let currentSetNumber = null;
+
+// Global variables for modification filtering
+let currentModificationFilter = 'all'; // 'all', 'missing', 'extra'
+
+// Global variables for category filtering
+let currentCategoryFilter = 'all'; // 'all', 'regular', 'minifig', 'spare'
+
+// Global variable for grid column count
+let currentColumnCount = 8; // Default to 8 columns
+
+// Global variable for tracking current user inventory ID
+let currentUserInventoryId = null;
 
 async function checkBuildingInstructionsAvailability(setNumber) {
     // Remove the -digit suffix from the set number
@@ -1119,6 +1862,13 @@ function generateColorFilterButtons(inventory) {
         button.textContent = color.color_name;
         button.onclick = () => toggleColorFilter(color.color_id);
         button.dataset.colorId = color.color_id;
+        
+        // Preserve selected state if this color was previously selected
+        if (selectedColors.has(color.color_id)) {
+            button.style.border = '2px solid #007bff';
+            button.style.boxShadow = '0 0 5px rgba(0, 123, 255, 0.5)';
+        }
+        
         colorButtonsContainer.appendChild(button);
     });
 }
@@ -1143,6 +1893,9 @@ function toggleColorFilter(colorId) {
         }
     });
     
+    // Update clear filters button visibility
+    updateClearFiltersButtonVisibility();
+    
     // Apply filter
     applyColorFilter();
 }
@@ -1157,33 +1910,82 @@ function clearColorFilter() {
         button.style.boxShadow = 'none';
     });
     
+    // Update clear filters button visibility
+    updateClearFiltersButtonVisibility();
+    
     // Show all parts
     applyColorFilter();
 }
 
-function applyColorFilter() {
-    const container = document.getElementById('inventoryList');
-    const partCards = container.querySelectorAll('.part-card');
+function updateClearFiltersButtonVisibility() {
+    const clearBtn = document.getElementById('clearAllFiltersBtn');
+    if (!clearBtn) return;
     
-    if (selectedColors.size === 0) {
-        // Show all parts
-        partCards.forEach(card => {
-            card.style.display = 'block';
-        });
-    } else {
-        // Filter parts by selected colors
-        partCards.forEach(card => {
-            const partKey = card.dataset.partKey;
-            const part = originalInventoryMap[partKey];
-            
-            if (part && selectedColors.has(part.color_id)) {
-                card.style.display = 'block';
+    // Check if any filters are active
+    const hasColorFilters = selectedColors.size > 0;
+    const hasModificationFilter = currentModificationFilter !== 'all';
+    const hasCategoryFilter = currentCategoryFilter !== 'all';
+    
+    const hasActiveFilters = hasColorFilters || hasModificationFilter || hasCategoryFilter;
+    
+    // Show/hide the button
+    clearBtn.style.display = hasActiveFilters ? 'block' : 'none';
+}
+
+function clearAllFilters() {
+    // Clear color filters
+    selectedColors.clear();
+    
+    // Reset color filter button appearances
+    const colorButtons = document.querySelectorAll('.color-filter-btn');
+    colorButtons.forEach(button => {
+        button.style.border = '1px solid #ccc';
+        button.style.boxShadow = 'none';
+    });
+    
+    // Reset modification filter
+    currentModificationFilter = 'all';
+    resetModificationFilterButtons();
+    
+    // Reset category filter
+    currentCategoryFilter = 'all';
+    resetCategoryFilterButtons();
+    
+    // Update button visibility
+    updateClearFiltersButtonVisibility();
+    
+    // Apply filters
+    displayFilteredParts();
+}
+
+function resetAllFiltersForNewSearch() {
+    // This function should be called when starting a new search to reset all filters
+    selectedColors.clear();
+    currentModificationFilter = 'all';
+    currentCategoryFilter = 'all';
+    currentColumnCount = 8; // Reset to default 8 columns
+}
+
+function refreshColorFilterButtons() {
+    // Update the appearance of color filter buttons based on current selection state
+    const colorButtons = document.querySelectorAll('.color-filter-btn');
+    colorButtons.forEach(button => {
+        const colorId = parseInt(button.dataset.colorId);
+        if (selectedColors.has(colorId)) {
+            button.style.border = '2px solid #007bff';
+            button.style.boxShadow = '0 0 5px rgba(0, 123, 255, 0.5)';
             } else {
-                card.style.display = 'none';
+            button.style.border = '1px solid #ccc';
+            button.style.boxShadow = 'none';
             }
         });
     }
+
+function applyColorFilter() {
+    // Use the new unified filtering system
+    displayFilteredParts();
 }
+
 
 function createPartCard(part, originalMap = {}) {
     // Generate part key that includes category information
@@ -1204,26 +2006,22 @@ function createPartCard(part, originalMap = {}) {
     partCard.innerHTML = `
         <div class="card-body">
             <div class="row align-items-center">
-                <div class="col-md-2">
-                    <div class="part-image-container">
-                        <img src="${part.part_image_url || 'https://via.placeholder.com/60x60?text=No+Image'}" 
+                <div class="text-center mb-2">
+                    <img src="${part.part_image_url || 'https://via.placeholder.com/80x80?text=No+Image'}" 
                              alt="${part.part_name}" 
                              class="part-image"
-                             onerror="this.src='https://via.placeholder.com/60x60?text=No+Image'">
+                         onerror="this.src='https://via.placeholder.com/80x80?text=No+Image'">
                     </div>
-                </div>
-                <div class="col-md-2">
+                <div class="col-12 text-center">
+                    <!-- Part info row -->
+                    <div class="mb-2">
                     <strong>${part.part_number}</strong><br>
                     <small class="text-muted">${part.part_name}</small>
                 </div>
-                <div class="col-md-2">
-                    <span class="badge" style="background-color: #${part.color_rgb}; color: ${getContrastColor(part.color_rgb)}; border: 1px solid #ccc;">${part.color_name}</span>
+                    <!-- Quantity controls row -->
+                    <div class="mb-2 quantity-label-container">
+                        ${modificationFromOriginal !== 0 ? `<small class="text-primary">Original: ${originalQty}</small><small class="${modificationFromOriginal > 0 ? 'text-success' : 'text-danger'}"> (${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal})</small>` : ''}
                 </div>
-                <div class="col-md-2">
-                    <small class="text-muted">Original:</small><br>
-                    <strong>${originalQty}</strong>
-                </div>
-                <div class="col-md-3">
                     <div class="quantity-controls">
                         <button class="btn btn-outline-danger btn-sm" onclick="modifyQuantity('${partKey}', -1)" 
                                 ${totalQty <= 0 ? 'disabled title="Cannot reduce below zero"' : ''}>
@@ -1234,10 +2032,6 @@ function createPartCard(part, originalMap = {}) {
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
-                    <small class="modification-info" style="display: ${modificationFromOriginal !== 0 ? 'block' : 'none'};">Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}</small>
-                </div>
-                <div class="col-md-1">
-                    ${part.is_spare ? '<span class="badge bg-warning">Spare</span>' : ''}
                 </div>
             </div>
         </div>
@@ -1259,9 +2053,73 @@ function modifyQuantity(partKey, change) {
     // Update the display without refreshing the entire inventory
     updateQuantityDisplay(partKey, originalQty, modifiedInventory[partKey]);
     
-    // Mark as having unsaved changes and show save button
-    hasUnsavedChanges = true;
-    document.getElementById('saveInventoryBtn').style.display = 'block';
+    // Update instance status
+    updateInstanceStatus();
+    
+    // Refresh the filtered display to update modification filter results
+    if (currentModificationFilter !== 'all') {
+        displayFilteredParts();
+    }
+    
+    // Automatically save the changes
+    autoSaveInventory();
+}
+
+async function autoSaveInventory() {
+    if (!currentSetNumber || !currentlySelectedInstance) {
+        return;
+    }
+    
+    // Show brief auto-save indicator
+    showAutoSaveIndicator();
+    
+    try {
+        const response = await fetch('/update_inventory', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                set_number: currentSetNumber,
+                instance_name: currentlySelectedInstance,
+                modifications: modifiedInventory
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Auto-save failed:', errorData.error);
+            // Don't show alert for auto-save failures to avoid interrupting user experience
+            // The user can still manually save if needed
+        }
+    } catch (error) {
+        console.error('Auto-save error:', error);
+        // Silently handle auto-save errors to avoid interrupting user experience
+    }
+}
+
+function showAutoSaveIndicator() {
+    // Create or update auto-save indicator
+    let indicator = document.getElementById('autoSaveIndicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'autoSaveIndicator';
+        indicator.className = 'auto-save-indicator';
+        indicator.innerHTML = '<i class="fas fa-save"></i> Auto-saved';
+        document.body.appendChild(indicator);
+    }
+    
+    // Show the indicator
+    indicator.style.display = 'block';
+    indicator.style.opacity = '1';
+    
+    // Hide after 2 seconds
+    setTimeout(() => {
+        indicator.style.opacity = '0';
+        setTimeout(() => {
+            indicator.style.display = 'none';
+        }, 300);
+    }, 2000);
 }
 
 async function loadModifiedInventory(setNumber, instanceName = 'Default') {
@@ -1289,6 +2147,75 @@ function showLoading(show) {
     }
 }
 
+function updateInstanceStatus() {
+    const detailedStatusElement = document.getElementById('instanceStatusDetailed');
+    
+    if (!detailedStatusElement) {
+        return; // Element doesn't exist yet
+    }
+    
+    if (!allInventoryParts || allInventoryParts.length === 0) {
+        detailedStatusElement.innerHTML = '';
+        return;
+    }
+    
+    let totalMissing = 0;
+    let totalExtra = 0;
+    let totalOriginalQty = 0;
+    let totalCurrentQty = 0;
+    
+    // Calculate total modifications and quantities (excluding spares)
+    allInventoryParts.forEach(part => {
+        // Skip spare parts for completion percentage calculation
+        if (part.is_spare) {
+            return;
+        }
+        
+        const partKey = `${part.part_number}_${part.color_id}_${part.is_spare ? 'spare' : 'regular'}_${part.is_minifig_part ? 'minifig' : 'normal'}`;
+        const originalPart = originalInventoryMap[partKey];
+        const originalQty = originalPart ? originalPart.quantity : part.quantity;
+        const modifiedQty = modifiedInventory[partKey] || 0;
+        const totalQty = originalQty + modifiedQty;
+        const modification = totalQty - originalQty;
+        
+        // Count all parts for total quantities (excluding spares)
+        totalOriginalQty += originalQty;
+        totalCurrentQty += totalQty;
+        
+        if (modification < 0) {
+            totalMissing += Math.abs(modification);
+        } else if (modification > 0) {
+            totalExtra += modification;
+        }
+    });
+    
+    
+    // Calculate completion percentage (excluding spares and extra parts)
+    const completionPercentage = totalOriginalQty > 0 ? Math.round((totalCurrentQty / totalOriginalQty) * 100) : 100;
+    
+    // Create detailed status display
+    const isComplete = totalMissing === 0 && totalExtra === 0;
+    const completionStatus = isComplete ? 'Complete' : 'Incomplete';
+    const completionClass = isComplete ? 'text-success' : 'text-warning';
+    
+    const detailedStatusHtml = `
+        <div class="status-item">
+            <span class="status-label">Completion:</span>
+            <span class="status-value ${completionClass}">${completionStatus} (${completionPercentage}%)</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Missing:</span>
+            <span class="status-value ${totalMissing > 0 ? 'text-danger' : 'text-muted'}">${totalMissing}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Extra:</span>
+            <span class="status-value ${totalExtra > 0 ? 'text-success' : 'text-muted'}">${totalExtra}</span>
+        </div>
+    `;
+    
+    detailedStatusElement.innerHTML = detailedStatusHtml;
+}
+
 function updateQuantityDisplay(partKey, originalQty, modifiedQty) {
     // Update the quantity display
     const qtyElement = document.getElementById(`qty_${partKey}`);
@@ -1296,31 +2223,23 @@ function updateQuantityDisplay(partKey, originalQty, modifiedQty) {
         qtyElement.textContent = originalQty + modifiedQty;
     }
     
-    // Update the modification info
+    // Update the combined original/modification label
     const partCard = qtyElement ? qtyElement.closest('.card') : null;
     if (partCard) {
-        // Find the modification info element
-        let modificationInfo = partCard.querySelector('.text-info');
-        
-        // If modification info element doesn't exist, create it
-        if (!modificationInfo) {
-            const quantityControls = partCard.querySelector('.quantity-controls');
-            if (quantityControls) {
-                modificationInfo = document.createElement('small');
-                modificationInfo.className = 'text-info';
-                modificationInfo.style.display = 'none';
-                quantityControls.parentNode.appendChild(modificationInfo);
-            }
-        }
-        
-        if (modificationInfo) {
+        // Find the container with the original quantity label using specific class
+        const originalLabelContainer = partCard.querySelector('.quantity-label-container');
+        if (originalLabelContainer) {
             const totalQty = originalQty + modifiedQty;
             const modificationFromOriginal = totalQty - originalQty;
+            
+            // Update the combined label - only show original if there's a modification
             if (modificationFromOriginal !== 0) {
-                modificationInfo.textContent = `Modified: ${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal}`;
-                modificationInfo.style.display = 'block';
+                originalLabelContainer.innerHTML = `
+                    <small class="text-primary">Original: ${originalQty}</small>
+                    <small class="${modificationFromOriginal > 0 ? 'text-success' : 'text-danger'}"> (${modificationFromOriginal > 0 ? '+' : ''}${modificationFromOriginal})</small>
+                `;
             } else {
-                modificationInfo.style.display = 'none';
+                originalLabelContainer.innerHTML = ''; // Hide when no modification
             }
         }
         
@@ -1813,7 +2732,7 @@ async function selectInstance(setNumber, instanceName) {
     
     // If switching to a different instance, hide current inventory first
     if (currentlySelectedInstance && currentlySelectedInstance !== instanceName) {
-        hasUnsavedChanges = false;
+        // Auto-save handles changes automatically
     }
 
     // Set the current instance index for arrow key navigation
@@ -1845,6 +2764,12 @@ async function selectInstance(setNumber, instanceName) {
             // Load and display inventory with instance-specific modifications
             await loadModifiedInventory(setNumber, instanceName);
             displayInventory(data.inventory);
+            
+            // Refresh color filter buttons to show current selection state
+            refreshColorFilterButtons();
+            
+            // Load and display the instance description
+            await loadInstanceDescription(setNumber, instanceName);
         } else {
             showAlert(data.error || 'Failed to load instance inventory', 'danger');
         }
@@ -1986,7 +2911,7 @@ async function deleteSetInstance(owned_set_id, instanceName) {
             //     document.getElementById('inventoryContainer').style.display = 'none';
             //     currentlySelectedInstance = null;
             //     currentInstanceName = 'Default';
-            //     hasUnsavedChanges = false;
+            //     Auto-save handles changes automatically
             // }
             
             // Remove the deleted instance from the DOM
@@ -2001,46 +2926,7 @@ async function deleteSetInstance(owned_set_id, instanceName) {
 }
 
 
-async function saveInventory() {
-    if (!hasUnsavedChanges) {
-        showAlert('No changes to save', 'info');
-        return;
-    }
-    
-    console.log('Saving inventory with data:', {
-        set_number: currentSetNumber,
-        instance_name: currentInstanceName,
-        modifications: modifiedInventory
-    });
-    
-    try {
-        const response = await fetch('/update_inventory', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                set_number: currentSetNumber,
-                instance_name: currentInstanceName,
-                modifications: modifiedInventory
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showAlert('Inventory saved successfully!', 'success');
-            hasUnsavedChanges = false;
-            // Hide the save button
-            document.getElementById('saveInventoryBtn').style.display = 'none';
-        } else {
-            showAlert(data.error || 'Failed to save inventory', 'danger');
-        }
-    } catch (error) {
-        console.error('Error saving inventory:', error);
-        showAlert('An error occurred while saving inventory', 'danger');
-    }
-}
+// saveInventory function removed - auto-save is now implemented
 
 // Initialize instruction cache when page loads
 loadInstructionCache();
